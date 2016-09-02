@@ -25,6 +25,8 @@ import cern.c2mon.server.common.alarm.TagWithAlarms;
 import cern.c2mon.server.common.alarm.TagWithAlarmsImpl;
 import cern.c2mon.server.common.tag.AbstractTagCacheObject;
 import cern.c2mon.server.common.tag.Tag;
+import cern.c2mon.shared.client.expression.Expression;
+import cern.c2mon.shared.client.serializer.JacksonSerializer;
 import cern.c2mon.shared.common.ConfigurationException;
 import cern.c2mon.shared.common.SimpleTypeReflectionHandler;
 import cern.c2mon.shared.common.datatag.*;
@@ -33,9 +35,9 @@ import cern.c2mon.shared.daq.config.DataTagAddressUpdate;
 import cern.c2mon.shared.daq.config.DataTagUpdate;
 import cern.c2mon.shared.daq.config.HardwareAddressUpdate;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.core.type.TypeReference;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.sql.Timestamp;
 import java.util.*;
@@ -199,6 +201,20 @@ public abstract class AbstractTagFacade<T extends Tag> extends AbstractFacade<T>
 
         tag.setMetadata(metadata);
       }
+
+      // TAG expression
+      tmpStr = properties.getProperty("expressions");
+      if (tmpStr != null) {
+
+        TypeReference typeReference = new TypeReference<List<Expression>>() {};
+        ArrayList<Expression> expressions = null;
+        try {
+          expressions = JacksonSerializer.mapper.readValue(tmpStr, typeReference);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        tag.setExpressions(expressions);
+      }
     } finally {
       tagCache.releaseWriteLockOnKey(tag.getId());
     }
@@ -281,7 +297,7 @@ public abstract class AbstractTagFacade<T extends Tag> extends AbstractFacade<T>
    *
    * <p>Note also adjust text field of cache object.
    *
-   * @param tagId
+   * @param tag
    * @param ruleTagId
    */
   @Override

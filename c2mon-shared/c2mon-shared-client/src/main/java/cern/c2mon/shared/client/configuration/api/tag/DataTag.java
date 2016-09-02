@@ -18,6 +18,7 @@ package cern.c2mon.shared.client.configuration.api.tag;
 
 import cern.c2mon.shared.client.configuration.api.util.DefaultValue;
 import cern.c2mon.shared.client.configuration.api.util.IgnoreProperty;
+import cern.c2mon.shared.client.expression.Expression;
 import cern.c2mon.shared.client.tag.TagMode;
 import cern.c2mon.shared.common.datatag.DataTagAddress;
 import cern.c2mon.shared.common.metadata.Metadata;
@@ -174,6 +175,12 @@ public class DataTag extends Tag {
 
     public DataTag.CreateBuilder metadata(Metadata metadata) {
       this.tagToBuild.setMetadata(metadata);
+      return this;
+    }
+
+    public DataTag.CreateBuilder expression(String expression){
+      Assert.isTrue(expression.contains("$value"));
+      this.tagToBuild.addExpression(new Expression(expression));
       return this;
     }
 
