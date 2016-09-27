@@ -1,16 +1,16 @@
 /******************************************************************************
  * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
- * 
+ *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free
  * Software Foundation, either version 3 of the license.
- * 
+ *
  * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
@@ -70,6 +70,8 @@ public class C2monServiceGateway {
   /** Static reference to the <code>AlarmService</code> singleton instance */
   private static AlarmService alarmService = null;
 
+  private static AlarmExpressionService alarmExpressionService = null;
+
   /** Static reference to the <code>StatisticsService</code> singleton instance */
   private static StatisticsService statisticsService = null;
 
@@ -101,7 +103,7 @@ public class C2monServiceGateway {
   @Deprecated
   public static C2monCommandManager getCommandManager() {
     startC2monClientSynchronous();
-    
+
     return commandManager;
   }
 
@@ -111,7 +113,7 @@ public class C2monServiceGateway {
    */
   public static CommandService getCommandService() {
     startC2monClientSynchronous();
-    
+
     return commandManager;
   }
 
@@ -123,7 +125,7 @@ public class C2monServiceGateway {
   @Deprecated
   public static C2monTagManager getTagManager() {
     startC2monClientSynchronous();
-    
+
     return tagManager;
   }
 
@@ -133,8 +135,18 @@ public class C2monServiceGateway {
    */
   public static AlarmService getAlarmService() {
     startC2monClientSynchronous();
-    
+
     return alarmService;
+  }
+
+  /**
+   * @return The C2MON alarm service, which provides
+   *         methods for alarm subscription and unsubscription.
+   */
+  public static AlarmExpressionService getAlarmExpressionService() {
+    startC2monClientSynchronous();
+
+    return alarmExpressionService;
   }
 
   /**
@@ -143,7 +155,7 @@ public class C2monServiceGateway {
    */
   public static StatisticsService getStatisticsService() {
     startC2monClientSynchronous();
-    
+
     return statisticsService;
   }
 
@@ -153,7 +165,7 @@ public class C2monServiceGateway {
    */
   public static ConfigurationService getConfigurationService() {
     startC2monClientSynchronous();
-    
+
     return configurationService;
   }
 
@@ -164,7 +176,7 @@ public class C2monServiceGateway {
    */
   public static TagService getTagService() {
     startC2monClientSynchronous();
-    
+
     return tagService;
   }
 
@@ -175,7 +187,7 @@ public class C2monServiceGateway {
   @Deprecated
   public static C2monSupervisionManager getSupervisionManager() {
     startC2monClientSynchronous();
-    
+
     return supervisionManager;
   }
 
@@ -187,7 +199,7 @@ public class C2monServiceGateway {
    */
   public static SupervisionService getSupervisionService() {
     startC2monClientSynchronous();
-    
+
     return supervisionManager;
   }
 
@@ -245,9 +257,9 @@ public class C2monServiceGateway {
   public static synchronized void startC2monClientSynchronous() throws RuntimeException {
     if (context == null) {
       startC2monClient();
-  
+
       LOG.info("Waiting for C2MON server connection (max " + MAX_INITIALIZATION_TIME / 1000  + " sec)...");
-  
+
       Long startTime = System.currentTimeMillis();
       while (!supervisionManager.isServerConnectionWorking()) {
         try { Thread.sleep(200); } catch (InterruptedException ie) { /* Do nothing */ }
@@ -273,6 +285,7 @@ public class C2monServiceGateway {
     commandManager = context.getBean(CommandManager.class);
 
     alarmService = context.getBean(AlarmService.class);
+    alarmExpressionService = context.getBean(AlarmExpressionService.class);
     configurationService = context.getBean(ConfigurationService.class);
     statisticsService = context.getBean(StatisticsService.class);
     tagService = context.getBean(TagService.class);

@@ -34,7 +34,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.annotation.PreDestroy;
 import javax.jms.*;
 
+import cern.c2mon.client.common.listener.BaseTagListener;
+import cern.c2mon.client.common.listener.ClientRequestReportListener;
+import cern.c2mon.client.common.listener.TagUpdateListener;
 import cern.c2mon.client.core.config.C2monClientProperties;
+import cern.c2mon.client.core.jms.*;
+import cern.c2mon.shared.client.request.ClientRequestReport;
+import cern.c2mon.shared.client.request.ClientRequestResult;
+import cern.c2mon.shared.client.request.JsonRequest;
 import com.google.gson.JsonSyntaxException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -43,13 +50,6 @@ import org.apache.activemq.command.ActiveMQTopic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
-
-import cern.c2mon.client.common.listener.ClientRequestReportListener;
-import cern.c2mon.client.common.listener.TagUpdateListener;
-import cern.c2mon.client.core.jms.*;
-import cern.c2mon.shared.client.request.ClientRequestReport;
-import cern.c2mon.shared.client.request.ClientRequestResult;
-import cern.c2mon.shared.client.request.JsonRequest;
 import org.springframework.stereotype.Component;
 
 /**
@@ -168,7 +168,15 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
    * Subscribes to the alarm topic and notifies any registered listeners. Thread
    * start once and lives until final stop.
    */
+  @Deprecated
   private AlarmListenerWrapper alarmListenerWrapper;
+
+  /**
+   * Subscribes to the alarm topic and notifies any registered listeners.
+   * Incoming alarms through the topic should be represented as tag with expressions.
+   * Thread start once and lives until final stop.
+   */
+  private final AlarmExpressionListenerWrapper alarmExpressionListenerWrapper;
 
   /**
    * Notified on slow consumer detection.
@@ -279,6 +287,8 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     heartbeatListenerWrapper.start();
     alarmListenerWrapper = new AlarmListenerWrapper(HIGH_LISTENER_QUEUE_SIZE, slowConsumerListener, topicPollingExecutor);
     alarmListenerWrapper.start();
+    alarmExpressionListenerWrapper = new AlarmExpressionListenerWrapper(HIGH_LISTENER_QUEUE_SIZE, slowConsumerListener, topicPollingExecutor);
+    alarmExpressionListenerWrapper.start();
   }
 
   /**
@@ -433,6 +443,9 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
       if (alarmListenerWrapper.getListenerCount() > 0) {
         subscribeToAlarmTopic();
       }
+      if (alarmExpressionListenerWrapper.getListenerCount() > 0) {
+        subscribeToAlarNewTopic();
+      }
 
       // refresh supervision subscription
       subscribeToSupervisionTopic();
@@ -454,6 +467,17 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     alarmSession = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
     alarmConsumer = alarmSession.createConsumer(alarmTopic);
     alarmConsumer.setMessageListener(alarmListenerWrapper);
+    log.debug("Successfully subscribed to alarm topic");
+  }
+
+  /**
+   * Subscribes to the alarm topic.
+   * @throws JMSException if problem subscribing
+   */
+  private void subscribeToAlarNewTopic() throws JMSException {
+    alarmSession = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+    alarmConsumer = alarmSession.createConsumer(alarmTopic);
+    alarmConsumer.setMessageListener(alarmExpressionListenerWrapper);
     log.debug("Successfully subscribed to alarm topic");
   }
 
@@ -901,6 +925,24 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
   }
 
   @Override
+  public void registerAlarmExpressionListener(BaseTagListener alarmExpressionListener) throws JMSException {
+    if (alarmExpressionListener == null) {
+      throw new NullPointerException("Trying to register null alarm expression listener with JmsProxy.");
+    }
+    // this is our first listener! -> it's time to subscribe to the alarm topic
+    if (alarmExpressionListenerWrapper.getListenerCount() == 0) {
+      try {
+        subscribeToAlarNewTopic();
+      } catch (JMSException e) {
+        log.error("Did not manage to subscribe To Alarm Topic.", e);
+        throw e;
+      }
+    }
+    alarmExpressionListenerWrapper.addListener(alarmExpressionListener);
+
+  }
+
+  @Override
   public void unregisterAlarmListener(final AlarmListener alarmListener) throws JMSException {
     if (alarmListener == null) {
       throw new NullPointerException("Trying to unregister null alarm listener from JmsProxy.");
@@ -918,6 +960,24 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     }
 
     alarmListenerWrapper.removeListener(alarmListener);
+  }
+
+  @Override
+  public void unregisterAlarmExpressionListener(BaseTagListener alarmExpressionListener) throws JMSException {
+    if (alarmExpressionListener == null) {
+      throw new NullPointerException("Trying to unregister null alarm listener from JmsProxy.");
+    }
+    if (alarmExpressionListenerWrapper.getListenerCount() == 1) { // this is our last
+      // listener!
+      // -> it's time to unsubscribe from the topic
+      try {
+        unsubscribeFromAlarmTopic();
+      } catch (JMSException e) {
+        log.error("Did not manage to subscribe To Alarm Topic.", e);
+        throw e;
+      }
+    }
+    alarmExpressionListenerWrapper.removeListener(alarmExpressionListener);
   }
 
   @Override
@@ -967,6 +1027,7 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     shutdownRequested = true;
     supervisionListenerWrapper.stop();
     alarmListenerWrapper.stop();
+    alarmExpressionListenerWrapper.stop();
     broadcastMessageListenerWrapper.stop();
     heartbeatListenerWrapper.stop();
     topicPollingExecutor.shutdown();
