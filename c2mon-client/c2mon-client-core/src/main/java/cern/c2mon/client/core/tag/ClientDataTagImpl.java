@@ -1,16 +1,16 @@
 /******************************************************************************
  * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
- * 
+ *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free
  * Software Foundation, either version 3 of the license.
- * 
+ *
  * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
@@ -26,6 +26,10 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import cern.c2mon.shared.client.expression.Expression;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.simpleframework.xml.Attribute;
@@ -65,15 +69,12 @@ import cern.c2mon.shared.rule.RuleFormatException;
  * and receives tag updates from the TIM server.
  * When the Tag value or quality changes it notifies its registered
  * <code>DataTagUpdateListeners</code>
- * @see TagFactory
  * @see DataTagUpdateListener
  * @author Matthias Braeger
  */
+@Slf4j
 @Root(name="Tag")
 public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateListener, TopicRegistrationDetails, SupervisionListener, Cloneable {
-
-  /** Log4j instance */
-  private static final Logger LOG = LoggerFactory.getLogger(ClientDataTagImpl.class);
 
   /** Default description when the object is not yet initialized */
   private static final String DEFAULT_DESCRIPTION = "Tag not initialised.";
@@ -193,6 +194,10 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    */
   private Map<String, Object> metadata = new HashMap<>();
 
+  @Getter
+  @Setter
+  private Collection<Expression> expressions = new ArrayList<>();
+
   /**
    * Concurrent modifiable collection of DataTagUpdateListeners registered for
    * updates on this DataTag
@@ -227,7 +232,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    * object to be used for subscriptions.
    * Sets the tag name to "Not.initialized" and the quality to UNINITIALIZED.
    * @param tagId the unique identifier for the DataTag
-   * @param If true, it will set the quality to UNDEFINED_TAG instead of UNINITIALIZED
+   * @param unknown if true, it will set the quality to UNDEFINED_TAG instead of UNINITIALIZED
    */
   public ClientDataTagImpl(final Long tagId, boolean unknown) {
     id = tagId;
@@ -280,12 +285,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
   public String getName() {
     updateTagLock.readLock().lock();
     try {
-      if (this.tagName == null) {
-        return "UNKNOWN";
-      }
-      else {
-        return tagName;
-      }
+      return this.tagName == null ? "UNKNOWN" : tagName;
     }
     finally {
       updateTagLock.readLock().unlock();
@@ -369,10 +369,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
   public String getUnit() {
     updateTagLock.readLock().lock();
     try {
-      if (unit != null) {
-        return unit;
-      }
-      return "";
+      return unit != null ? unit : "";
     }
     finally {
       updateTagLock.readLock().unlock();
@@ -383,11 +380,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
   public final Class< ? > getType() {
     updateTagLock.readLock().lock();
     try {
-      Class< ? > type = null;
-      if (this.tagValue != null) {
-        type = tagValue.getClass();
-      }
-      return type;
+      return this.tagValue != null ? tagValue.getClass() : null;
     }
     finally {
       updateTagLock.readLock().unlock();
@@ -446,9 +439,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
     Tag clone = null;
     updateTagLock.writeLock().lock();
     try {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("validate() - Removing " + statusToRemove + " quality status from tag " + this.id);
-      }
+      log.trace("validate() - Removing {} quality status from tag {}", statusToRemove, this.id);
       if (tagQuality.isInvalidStatusSet(statusToRemove)) {
         // remove the quality status
         tagQuality.removeInvalidStatus(statusToRemove);
@@ -476,9 +467,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
     Tag clone = null;
     updateTagLock.writeLock().lock();
     try {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("invalidate() - Invalidating tag " + this.id + " with quality status " + status);
-      }
+      log.trace("invalidate() - Invalidating tag {} with quality status {}", this.id, status);
       // Invalidate the object.
       tagQuality.addInvalidStatus(status, description);
 
@@ -497,7 +486,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    * Private method to notify all registered <code>DataTagUpdateListener</code> instances.
    * Please avoid calling this method within a WRITELOCK block since it could be a potential
    * candidate for risking a deadlocks.
-   * @param Please only provide a clone of this tag
+   * @param clone only provide a clone of this tag
    */
   private synchronized void notifyListeners(final Tag clone) {
     for (BaseListener updateListener : listeners) {
@@ -505,7 +494,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
         updateListener.onUpdate(clone);
       }
       catch (Exception e) {
-        LOG.error("notifyListeners() : error notifying DataTagUpdateListeners", e);
+        log.error("notifyListeners() : error notifying DataTagUpdateListeners", e);
       }
     }
   }
@@ -522,12 +511,10 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    *                     the initial value which was sent through {@link DataTagListener#onInitialUpdate(Collection)}
    *                     method. Otherwise, pass {@code null} as parameter, if the initial update shall be sent via the
    *                     {@link DataTagUpdateListener#onUpdate(Tag)}
-   * @see #removeUpdateListener(DataTagUpdateListener)
+   * @see #removeUpdateListener(BaseListener)
    */
   public void addUpdateListener(final BaseListener<Tag> listener, final Tag initialValue) {
-    if (LOG.isTraceEnabled()) {
-      LOG.trace("addUpdateListener() called.");
-    }
+      log.trace("addUpdateListener() for the tag {} called", initialValue.getName());
     listeners.add(listener);
 
     Tag clone = null;
@@ -548,7 +535,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
         listener.onUpdate(clone);
       }
       catch (Exception e) {
-        LOG.error("addUpdateListener() : error notifying listener", e);
+        log.error("addUpdateListener() : error notifying listener", e);
       }
     }
   }
@@ -560,7 +547,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    * all <code>DataTagUpdateListener</code> objects registered.
    *
    * @param listener the DataTagUpdateListener that will receive value updates message for this tag
-   * @see #removeUpdateListener(DataTagUpdateListener)
+   * @see #removeUpdateListener(BaseListener)
    */
   public void addUpdateListener(final BaseListener listener) {
     addUpdateListener(listener, null);
@@ -573,14 +560,10 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    * an update event to all <code>DataTagUpdateListener</code> objects
    * registered.
    * @param listeners the DataTagUpdateListeners that will receive value updates message for this tag
-   * @param sendInitialValuesToListener if set to <code>true</code>, the listener will receive the
-   *                                    current value of the tag.
-   * @see #removeUpdateListener(DataTagUpdateListener)
+   * @see #removeUpdateListener(BaseListener)
    */
   public void addUpdateListeners(final Collection<BaseListener> listeners) {
-    for (BaseListener listener : listeners) {
-      addUpdateListener(listener);
-    }
+    listeners.forEach(this::addUpdateListener);
   }
 
   /**
@@ -736,9 +719,8 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    * matches and if the server time stamp of the update is older than the current time
    * stamp set.
    *
-   * @param transferTag The object that contains the updates.
-   * @return <code>true</code>, if the update was successful, otherwise
-   *         <code>false</code>
+   * @param tagValueUpdate The object that contains the updates.
+   * @return the status if the update was successful or not
    */
   public boolean update(final TagValueUpdate tagValueUpdate) {
     Tag clone = null;
@@ -791,7 +773,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
 
       if (valid) {
         if (tagUpdate.getRuleExpression() != null) {
-          ruleExpression = RuleExpression.createExpression(tagUpdate.getRuleExpression());
+          this.ruleExpression = RuleExpression.createExpression(tagUpdate.getRuleExpression());
         }
 
         doUpdateValues(tagUpdate);
@@ -801,30 +783,29 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
         for (Long processId : tagUpdate.getProcessIds()) {
          updatedProcessMap.put(processId, processSupervisionStatus.get(processId));
         }
-        processSupervisionStatus = updatedProcessMap;
+        this.processSupervisionStatus = updatedProcessMap;
 
         // update equipment map
         Map<Long, SupervisionEvent> updatedEquipmentMap = new HashMap<Long, SupervisionEvent>();
         for (Long equipmentId : tagUpdate.getEquipmentIds()) {
           updatedEquipmentMap.put(equipmentId, equipmentSupervisionStatus.get(equipmentId));
         }
-        equipmentSupervisionStatus = updatedEquipmentMap;
+        this.equipmentSupervisionStatus = updatedEquipmentMap;
 
         // update sub equipment map
         Map<Long, SupervisionEvent> updatedSubEquipmentMap = new HashMap<Long, SupervisionEvent>();
         for (Long subEquipmentId : tagUpdate.getSubEquipmentIds()) {
           updatedSubEquipmentMap.put(subEquipmentId, subEquipmentSupervisionStatus.get(subEquipmentId));
         }
-        subEquipmentSupervisionStatus = updatedSubEquipmentMap;
+        this.subEquipmentSupervisionStatus = updatedSubEquipmentMap;
 
-        tagName = tagUpdate.getName();
-        topicName = tagUpdate.getTopicName();
-        unit = tagUpdate.getUnit();
+        this.tagName = tagUpdate.getName();
+        this.topicName = tagUpdate.getTopicName();
+        this.unit = tagUpdate.getUnit();
 
-        aliveTagFlag = tagUpdate.isAliveTag();
-        controlTagFlag = tagUpdate.isControlTag();
+        this.aliveTagFlag = tagUpdate.isAliveTag();
+        this.controlTagFlag = tagUpdate.isControlTag();
         this.metadata = tagUpdate.getMetadata();
-
         // Notify all listeners of the update
         clone = this.clone();
       }
@@ -939,17 +920,18 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
   private void doUpdateValues(final TagValueUpdate tagValueUpdate) {
     updateTagQuality(tagValueUpdate.getDataTagQuality());
 
-    alarms.clear();
-    alarms.addAll(tagValueUpdate.getAlarms());
+    this.alarms.clear();
+    this.alarms.addAll(tagValueUpdate.getAlarms());
 
-    description = tagValueUpdate.getDescription();
-    valueDescription = tagValueUpdate.getValueDescription();
-    serverTimestamp = tagValueUpdate.getServerTimestamp();
-    daqTimestamp = tagValueUpdate.getDaqTimestamp();
-    sourceTimestamp = tagValueUpdate.getSourceTimestamp();
-    tagValue = tagValueUpdate.getValue();
-    mode = tagValueUpdate.getMode();
-    simulated = tagValueUpdate.isSimulated();
+    this.description = tagValueUpdate.getDescription();
+    this.valueDescription = tagValueUpdate.getValueDescription();
+    this.serverTimestamp = tagValueUpdate.getServerTimestamp();
+    this.daqTimestamp = tagValueUpdate.getDaqTimestamp();
+    this.sourceTimestamp = tagValueUpdate.getSourceTimestamp();
+    this.tagValue = tagValueUpdate.getValue();
+    this.mode = tagValueUpdate.getMode();
+    this.simulated = tagValueUpdate.isSimulated();
+    this.expressions = tagValueUpdate.getExpressions();
   }
 
   /* (non-Javadoc)
@@ -1179,8 +1161,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
       return clone;
     }
     catch (CloneNotSupportedException cloneException) {
-      LOG.error(
-          "clone() - Cloning the ClientDataTagImpl object failed! No update sent to the client.");
+      log.error( "clone() - Cloning the ClientDataTagImpl object failed! No update sent to the client.");
       throw new RuntimeException(cloneException);
     }
     finally {
@@ -1280,7 +1261,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
             break;
           default:
             String errorMsg = "The supervision event type " + supervisionEvent.getEntity() + " is not supported.";
-            LOG.error("update(SupervisionEvent) - " + errorMsg);
+            log.error("update(SupervisionEvent) - " + errorMsg);
             throw new IllegalArgumentException(errorMsg);
         }
 
@@ -1289,8 +1270,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
           clone = this.clone();
         }
       }
-    }
-    finally {
+    } finally {
       updateTagLock.writeLock().unlock();
     }
 
@@ -1331,6 +1311,7 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
   /**
    * Static method for creating a <code>ClientDataTagImpl</code> object
    * from a XML String by making use of the simpleframework XML library.
+   *
    * @param xml The XML representation of a <code>ClientDataTagImpl</code> object
    * @return <code>ClientDataTagImpl</code> object created from the given XML String
    * @throws Exception In case of a parsing error or a wrong XML definition
@@ -1338,21 +1319,21 @@ public class ClientDataTagImpl implements Tag, ClientDataTagValue, TagUpdateList
    */
   public static ClientDataTagImpl fromXml(final String xml) throws Exception {
 
-      ClientDataTagImpl cdt = null;
-      StringReader sr = null;
-      Serializer serializer = new Persister(new AnnotationStrategy());
+    ClientDataTagImpl cdt = null;
+    StringReader sr = null;
+    Serializer serializer = new Persister(new AnnotationStrategy());
 
-      try {
-          sr = new StringReader(xml);
-          cdt = serializer.read(ClientDataTagImpl.class, new StringReader(xml), false);
-      } finally {
+    try {
+      sr = new StringReader(xml);
+      cdt = serializer.read(ClientDataTagImpl.class, new StringReader(xml), false);
+    } finally {
 
-          if (sr != null) {
-              sr.close();
-          }
+      if (sr != null) {
+        sr.close();
       }
+    }
 
-      return cdt;
+    return cdt;
   }
 
   /**

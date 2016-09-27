@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
 
+import cern.c2mon.shared.client.expression.Expression;
 import org.junit.Test;
 
 import cern.c2mon.shared.client.alarm.AlarmValue;
@@ -616,6 +617,11 @@ public class ClientDataTagImplIsValidUpdateTest {
     }
 
     @Override
+    public Collection<Expression> getExpressions() {
+      return null;
+    }
+
+    @Override
     public void setValue(Object arg) {
     }
   }
@@ -709,6 +715,11 @@ public class ClientDataTagImplIsValidUpdateTest {
 
     @Override
     public String getValueClassName() {
+      return null;
+    }
+
+    @Override
+    public Collection<Expression> getExpressions() {
       return null;
     }
 
