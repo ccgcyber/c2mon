@@ -1,16 +1,16 @@
 /******************************************************************************
  * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
- * 
+ *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free
  * Software Foundation, either version 3 of the license.
- * 
+ *
  * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
@@ -170,6 +170,28 @@ public class RequestHandlerImpl implements RequestHandler {
   }
 
   @Override
+  public Collection<TagValueUpdate> requestAlarmExpressions(final Collection<Long> tagIdsIds) throws JMSException {
+    if (tagIdsIds== null) {
+      throw new NullPointerException("requestAlarmExpressions(..) method called with null parameter.");
+    }
+    return executeRequest(tagIdsIds, TagValueUpdate.class, null, defaultRequestQueue);
+  }
+
+  @Override
+  public Collection<TagValueUpdate> requestAllActiveAlarmExpressions() throws JMSException {
+
+    ClientRequestImpl<TagValueUpdate> activeAlarmsRequest = new ClientRequestImpl<>(
+        ClientRequest.ResultType.TRANSFER_TAG_VALUE_LIST,
+        RequestType.ACTIVE_EXPRESSION_ALARMS_REQUEST,
+        60000); // == timeout
+
+    Collection<TagValueUpdate> result = jmsProxy.sendRequest(activeAlarmsRequest, defaultRequestQueue,
+        activeAlarmsRequest.getTimeout());
+
+    return result;
+  }
+
+  @Override
   public Collection<CommandTagHandle> requestCommandTagHandles(final Collection<Long> commandIds) {
     if (commandIds == null) {
       throw new NullPointerException("requestTags(..) method called with null parameter.");
@@ -269,7 +291,7 @@ public class RequestHandlerImpl implements RequestHandler {
     LOGGER.debug("Client request completed.");
     return finalCollection;
   }
-  
+
   /**
    * Splits and executes a id-base request, splitting the collection into
    * smaller requests.
