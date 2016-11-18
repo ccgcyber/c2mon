@@ -36,13 +36,13 @@ import cern.c2mon.shared.daq.config.DataTagUpdate;
 import cern.c2mon.shared.daq.config.HardwareAddressUpdate;
 import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.core.type.TypeReference;
+import lombok.extern.slf4j.Slf4j;
+
 
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * Common implementation of the Tag facade logic.
@@ -131,17 +131,7 @@ public abstract class AbstractTagFacade<T extends Tag> extends AbstractFacade<T>
     dataTagUpdate.setDataTagId(tag.getId());
     tagCache.acquireWriteLockOnKey(tag.getId());
     try {
-      String tmpStr = null;
-      // TAG ID (not used so far as Id stored as entitypkey)
-//      if ((tmpStr = properties.getProperty("id")) != null) {
-//        try {
-//          tag.setId(Long.valueOf(tmpStr));
-//        }
-//        catch (NumberFormatException e) {
-//          throw new ConfigurationException(ConfigurationException.INVALID_PARAMETER_VALUE, "NumberFormatException: "
-//              + "Unable to convert parameter \"id\" to Long: " + tmpStr);
-//        }
-//      }
+      String tmpStr;
 
       // TAG name and topic derived from name
       if ((tmpStr = properties.getProperty("name")) != null) {
@@ -212,6 +202,9 @@ public abstract class AbstractTagFacade<T extends Tag> extends AbstractFacade<T>
         ArrayList<Expression> expressions = null;
         try {
           expressions = JacksonSerializer.mapper.readValue(tmpStr, typeReference);
+          if(expressions != null ) {
+            expressions.stream().forEach(exp -> exp.setVersion(System.currentTimeMillis()));
+          }
         } catch (IOException e) {
           e.printStackTrace();
         }
