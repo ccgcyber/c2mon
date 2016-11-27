@@ -46,7 +46,7 @@
       <id column="ALARMID"/>
     </resultMap>
 
-  <resultMap id="expressionResultMap" type="Expression">
+  <resultMap id="expressionResultMap" type="cern.c2mon.shared.client.expression.Expression">
     <id column="TAGID"/>
     <result property="name" column="EXPRESSIONNAME"/>
     <result property="alarm" column="EXPRESSIONALARM" javaType="java.lang.Boolean" jdbcType="NUMERIC"/>
