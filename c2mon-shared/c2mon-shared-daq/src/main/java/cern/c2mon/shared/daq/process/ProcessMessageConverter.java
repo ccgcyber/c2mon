@@ -73,6 +73,4 @@ public final class ProcessMessageConverter {
     return this.xmlConverter.toXml(object);
   }
 
-  }
-
 }
