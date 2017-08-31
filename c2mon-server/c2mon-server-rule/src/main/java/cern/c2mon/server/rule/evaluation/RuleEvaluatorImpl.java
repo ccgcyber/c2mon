@@ -146,9 +146,7 @@ public class RuleEvaluatorImpl implements C2monCacheListener<Tag>, SmartLifecycl
    */
   @Override
   public final void evaluateRule(final Long ruleId) {
-
-      StringBuffer str = new StringBuffer("").append(ruleId).append(" evaluateRule() called");
-      log.trace(str.toString());
+    log.trace("{} evaluateRule() called", ruleId);
 
     final Timestamp ruleResultTimestamp = new Timestamp(System.currentTimeMillis());
 

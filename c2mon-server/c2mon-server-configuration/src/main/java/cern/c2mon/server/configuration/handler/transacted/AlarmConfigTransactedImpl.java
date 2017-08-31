@@ -75,7 +75,6 @@ public class AlarmConfigTransactedImpl implements AlarmConfigTransacted {
    * @param alarmFacade the alarm facade bean
    * @param alarmDAO the alarm DAO bean
    * @param alarmCache the alarm cache bean
-   * @param tagConfigGateway the tag configuration gateway bean
    */
   @Autowired
   public AlarmConfigTransactedImpl(final AlarmFacade alarmFacade, final AlarmLoaderDAO alarmDAO,
@@ -141,7 +140,7 @@ public class AlarmConfigTransactedImpl implements AlarmConfigTransacted {
   public void doUpdateAlarm(final Long alarmId, final Properties properties) {
     //reject if trying to change datatag it is attached to - not currently allowed
     if (properties.containsKey("dataTagId")) {
-      LOGGER.warn("Attempting to change the tag to which an alarm is attached - this is not currently supported!");
+      LOGGER.warn("Attempting to change the tag to which an alarm is attached - this is not supported yet!");
       properties.remove("dataTagId");
     }
     

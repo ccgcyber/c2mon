@@ -40,9 +40,6 @@ public class DeviceMapperTest extends AbstractMapperTest {
   @Autowired
   private DeviceMapper deviceMapper;
 
-  @Autowired
-  private DeviceClassMapper deviceClassMapper;
-
   @Test
   public void testGetItem() throws ClassNotFoundException {
     Device device1 = deviceMapper.getItem(300L); // getDevice(300L);

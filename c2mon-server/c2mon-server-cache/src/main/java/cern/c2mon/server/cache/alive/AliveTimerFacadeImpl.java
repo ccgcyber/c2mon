@@ -1,23 +1,22 @@
 /******************************************************************************
  * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
- * 
+ *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free
  * Software Foundation, either version 3 of the license.
- * 
+ *
  * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 package cern.c2mon.server.cache.alive;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -34,12 +33,10 @@ import cern.c2mon.server.common.process.Process;
  * Implementation of the AliverTimerFacade.
  *
  * @author Mark Brightwell
- *
  */
 @Service
+@Slf4j
 public class AliveTimerFacadeImpl implements AliveTimerFacade {
-
-  private Logger LOGGER = LoggerFactory.getLogger(AliveTimerFacadeImpl.class);
 
   private AliveTimerCache aliveTimerCache;
 
@@ -62,13 +59,14 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
       update(aliveTimer);
       aliveTimerCache.put(aliveId, aliveTimer);
     } catch (CacheElementNotFoundException cacheEx) {
-      LOGGER.error("Cannot locate the AliveTimer in the cache (Id is " + aliveId + ") - unable to update it.", cacheEx);
+      log.error("Cannot locate the AliveTimer in the cache (Id is " + aliveId + ") - unable to update it.", cacheEx);
     } catch (Exception e) {
-      LOGGER.error("updatedAliveTimer() failed for an unknown reason: ", e);
+      log.error("updatedAliveTimer() failed for an unknown reason: ", e);
     } finally {
       aliveTimerCache.releaseWriteLockOnKey(aliveId);
     }
   }
+
   /**
    * Update this alive timer. This method will reset the time of the last
    * update and thus relaunch the alive timer.
@@ -83,12 +81,12 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
 
     aliveTimer.setActive(true);
     aliveTimer.setLastUpdate(System.currentTimeMillis());
-    if (LOGGER.isDebugEnabled()) {
+    if (log.isDebugEnabled()) {
       StringBuffer str = new StringBuffer("Updated alive timer for ");
       str.append(AliveTimer.ALIVE_TYPE_PROCESS + " ");
       str.append(aliveTimer.getRelatedName());
       str.append(".");
-      LOGGER.debug(str.toString());
+      log.debug(str.toString());
     }
   }
 
@@ -100,9 +98,9 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
       start(aliveTimer);
       aliveTimerCache.put(id, aliveTimer);
     } catch (CacheElementNotFoundException cacheEx) {
-      LOGGER.error("Cannot locate the AliveTimer in the cache (Id is " + id + ") - unable to start it.");
+      log.error("Cannot locate the AliveTimer in the cache (Id is " + id + ") - unable to start it.");
     } catch (Exception e) {
-      LOGGER.error("Unable to start the alive timer " + id, e);
+      log.error("Unable to start the alive timer " + id, e);
     } finally {
       aliveTimerCache.releaseWriteLockOnKey(id);
     }
@@ -113,12 +111,12 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
    */
   private void start(final AliveTimer aliveTimer) {
     if (!aliveTimer.isActive()) {
-      if (LOGGER.isDebugEnabled()) {
+      if (log.isDebugEnabled()) {
         StringBuffer str = new StringBuffer("start() : starting alive for ");
         str.append(AliveTimer.ALIVE_TYPE_PROCESS + " ");
         str.append(aliveTimer.getRelatedName());
         str.append(".");
-        LOGGER.debug(str.toString());
+        log.debug(str.toString());
       }
       aliveTimer.setActive(true);
       aliveTimer.setLastUpdate(System.currentTimeMillis());
@@ -128,7 +126,7 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
   @Override
   public void stop(Long id) {
     aliveTimerCache.acquireWriteLockOnKey(id);
-    LOGGER.debug("Stopping alive timer " + id + " and dependent alive timers.");
+    log.debug("Stopping alive timer " + id + " and dependent alive timers.");
     try {
       AliveTimer aliveTimer = aliveTimerCache.get(id);
       stop(aliveTimer);
@@ -140,9 +138,9 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
 //      }
       aliveTimerCache.put(id, aliveTimer);
     } catch (CacheElementNotFoundException cacheEx) {
-      LOGGER.error("Cannot locate the AliveTimer in the cache (Id is " + id + ") - unable to stop it.");
+      log.error("Cannot locate the AliveTimer in the cache (Id is " + id + ") - unable to stop it.");
     } catch (Exception e) {
-      LOGGER.error("Unable to stop the alive timer " + id, e);
+      log.error("Unable to stop the alive timer " + id, e);
     } finally {
       aliveTimerCache.releaseWriteLockOnKey(id);
     }
@@ -153,12 +151,12 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
    */
   private void stop(final AliveTimer aliveTimer) {
     if (aliveTimer.isActive()) {
-      if (LOGGER.isDebugEnabled()) {
+      if (log.isDebugEnabled()) {
         StringBuffer str = new StringBuffer("stop() : stopping alive for ");
         str.append(aliveTimer.getAliveTypeDescription() + " ");
         str.append(aliveTimer.getRelatedName());
         str.append(".");
-        LOGGER.debug(str.toString());
+        log.debug(str.toString());
       }
       aliveTimer.setActive(false);
       aliveTimer.setLastUpdate(System.currentTimeMillis());
@@ -167,6 +165,7 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
 
   /**
    * Check whether this alive timer has expired.
+   *
    * @return true if the alive timer is active and it has not been updated since
    * at least "aliveInterval" milliseconds.
    */
@@ -174,8 +173,8 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
   public boolean hasExpired(final Long aliveTimerId) {
     aliveTimerCache.acquireReadLockOnKey(aliveTimerId);
     try {
-        AliveTimer aliveTimer = aliveTimerCache.get(aliveTimerId);
-        return (System.currentTimeMillis() - aliveTimer.getLastUpdate() > aliveTimer.getAliveInterval() + aliveTimer.getAliveInterval() / 3);
+      AliveTimer aliveTimer = aliveTimerCache.get(aliveTimerId);
+      return (System.currentTimeMillis() - aliveTimer.getLastUpdate() > aliveTimer.getAliveInterval() + aliveTimer.getAliveInterval() / 3);
     } finally {
       aliveTimerCache.releaseReadLockOnKey(aliveTimerId);
     }
@@ -183,25 +182,25 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
 
   @Override
   public void startAllTimers() {
-    LOGGER.debug("Starting all alive timers in cache.");
+    log.debug("Starting all alive timers in cache.");
     try {
       for (Long currentId : aliveTimerCache.getKeys()) {
         start(currentId);
       }
     } catch (Exception e) {
-      LOGGER.error("Unable to retrieve list of alive timers from cache when attempting to start the timers.", e);
+      log.error("Unable to retrieve list of alive timers from cache when attempting to start the timers.", e);
     }
   }
 
   @Override
   public void stopAllTimers() {
-    LOGGER.debug("Stopping all alive timers in the cache.");
+    log.debug("Stopping all alive timers in the cache.");
     try {
       for (Long currentId : aliveTimerCache.getKeys()) {
         stop(currentId);
       }
     } catch (Exception e) {
-      LOGGER.error("Unable to retrieve list of alive timers from cache when attempting to stop all timers.", e);
+      log.error("Unable to retrieve list of alive timers from cache when attempting to stop all timers.", e);
     }
   }
 
@@ -214,7 +213,7 @@ public class AliveTimerFacadeImpl implements AliveTimerFacade {
       type = AliveTimer.ALIVE_TYPE_SUBEQUIPMENT;
     }
     AliveTimer aliveTimer = new AliveTimerCacheObject(abstractEquipment.getAliveTagId(), abstractEquipment.getId(), abstractEquipment.getName(),
-                                                      abstractEquipment.getStateTagId(), type, abstractEquipment.getAliveInterval());
+        abstractEquipment.getStateTagId(), type, abstractEquipment.getAliveInterval());
     aliveTimerCache.put(aliveTimer.getId(), aliveTimer);
   }
 

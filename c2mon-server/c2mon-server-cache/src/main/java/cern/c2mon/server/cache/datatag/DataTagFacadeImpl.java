@@ -16,37 +16,36 @@
  *****************************************************************************/
 package cern.c2mon.server.cache.datatag;
 
+import java.sql.Timestamp;
+import java.util.Properties;
+
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import cern.c2mon.server.cache.*;
 import cern.c2mon.server.cache.exception.CacheElementNotFoundException;
 import cern.c2mon.server.common.control.ControlTag;
 import cern.c2mon.server.common.datatag.DataTag;
 import cern.c2mon.server.common.datatag.DataTagCacheObject;
-import cern.c2mon.server.common.expression.Evaluator;
 import cern.c2mon.shared.common.ConfigurationException;
 import cern.c2mon.shared.common.datatag.TagQualityStatus;
-import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Service;
-
-import java.sql.Timestamp;
-import java.util.Properties;
 
 import static cern.c2mon.shared.common.type.TypeConverter.getType;
 
 /**
  * Manages the update logic to DataTag cache objects (including ControlTags, which currently
  * extend DataTags - could be separated in the future if this changes).
- *
+ * <p>
  * <p>IMPORTANT: this bean is the one responsible for notifying listeners if a DataTag has
  * been updated; be careful not to notify listeners twice if calling other methods within
  * this class
- *
+ * <p>
  * <p>NOTE: to notify listeners of updates use the provided private method
  * (notifyListenersOfUpdate(DataTag)) to determine which cache needs notifying.
- *
+ * <p>
  * <p>ALSO: all methods that modify the DataTag cache should log this to the
  * DataTagCacheUpdate.log file.
  *
@@ -68,13 +67,14 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
 
   /**
    * Constructor.
+   *
    * @param dataTagCacheObjectFacade the object that acts directly on the cache object
-   * @param dataTagCache the cache containing the DataTags
-   * @param qualityConverter the bean managing how the quality changes on incoming values
-   * @param alarmFacade the alarm facade bean
-   * @param alarmCache the alarm cache bean
-   * @param equipmentFacade Interface of the bean used to interact with the EquipmentCacheObject
-   * @param subEquipmentFacade Interface of the bean used to interact with the SubEquipmentCacheObject
+   * @param dataTagCache             the cache containing the DataTags
+   * @param qualityConverter         the bean managing how the quality changes on incoming values
+   * @param alarmFacade              the alarm facade bean
+   * @param alarmCache               the alarm cache bean
+   * @param equipmentFacade          Interface of the bean used to interact with the EquipmentCacheObject
+   * @param subEquipmentFacade       Interface of the bean used to interact with the SubEquipmentCacheObject
    */
   @Autowired
   public DataTagFacadeImpl(final DataTagCacheObjectFacade dataTagCacheObjectFacade,
@@ -94,9 +94,10 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
    * To be called internally only within a dataTag synchronized block (if object in cache).
    * Does not notify listeners. Only cache timestamp is set (others are null). Should not be made public.
    *
-   * @param dataTag
-   * @param dataTagQuality
-   * @param timestamp the cache timestamp to set (others left unchanged)
+   * @param tag
+   * @param statusToAdd The quality status to be added to the data tag
+   * @param description The description of the change of quality
+   * @param timestamp   the cache timestamp to set (others left unchanged)
    */
   @Override
   protected final void invalidateQuietly(final DataTag tag, final TagQualityStatus statusToAdd, final String description, final Timestamp timestamp) {
@@ -106,6 +107,7 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
 
   /**
    * Generates the DAQ configuration XML structure for a single data tag (not control tag!)
+   *
    * @param id the id of the data tag
    * @return returns the configuration XML as a String;
    * if the tag could not be located in the cache, logs an error and returns the empty String
@@ -128,7 +130,8 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
   /**
    * Public method returning the configuration XML string for a given {@link DataTagCacheObject}
    * (was previously static in SourceDataTag class). Currently used for DAQ start up: TODO switch to generateSourceDataTag method.
-   * @param dataTagCacheObject the cache object
+   *
+   * @param dataTag the cache object
    * @return the XML string
    */
   @Override
@@ -185,12 +188,12 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
       return str.toString();
     } finally {
       tagCache.releaseReadLockOnKey(dataTag.getId());
-  }
-
+    }
   }
 
   /**
    * Log the cache object to the log file.
+   *
    * @param dataTagCacheObject the cache object
    */
   @Override
@@ -200,7 +203,7 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
       TAGLOG.info(dataTagCacheObject.toString());
     } finally {
       tagCache.releaseReadLockOnKey(dataTagCacheObject.getId());
-  }
+    }
   }
 
   @Override
@@ -225,7 +228,7 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
   /**
    * Checks that a DataTagCacheObject has a valid configuration. Is
    * used after creating or reconfiguring a tag.
-   *
+   * <p>
    * <p>IMPORTANT: Call within synch block necessary (instumentalize in TC also necessary!)
    * so should not usually be used outside server-core
    *
@@ -250,8 +253,7 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
               ConfigurationException.INVALID_PARAMETER_VALUE,
               "Parameter \"minValue\" must be of type " + dataTagCacheObject.getDataType() + " or null");
         }
-      }
-      catch (Exception e) {
+      } catch (Exception e) {
         throw new ConfigurationException(
             ConfigurationException.INVALID_PARAMETER_VALUE,
             "Error validating parameter \"minValue\": " + e.getMessage());
@@ -266,8 +268,7 @@ public class DataTagFacadeImpl extends AbstractDataTagFacade<DataTag> implements
               ConfigurationException.INVALID_PARAMETER_VALUE,
               "Parameter \"maxValue\" must be of type " + dataTagCacheObject.getDataType() + " or null.");
         }
-      }
-      catch (Exception e) {
+      } catch (Exception e) {
         throw new ConfigurationException(
             ConfigurationException.INVALID_PARAMETER_VALUE,
             "Error validating parameter \"maxValue\": " + e.getMessage());
