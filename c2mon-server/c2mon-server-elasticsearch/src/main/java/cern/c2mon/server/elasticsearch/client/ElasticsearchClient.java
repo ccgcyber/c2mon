@@ -19,8 +19,11 @@ package cern.c2mon.server.elasticsearch.client;
 import cern.c2mon.server.elasticsearch.config.ElasticsearchProperties;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpHost;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.settings.Settings;
@@ -57,6 +60,12 @@ public class ElasticsearchClient {
   private ElasticsearchProperties properties;
 
   @Getter
+  private RestHighLevelClient restClient;
+
+  @Getter
+  private RestClient lowLevelRestClient;
+
+  @Getter
   private Client client;
 
   @Getter
@@ -77,6 +86,18 @@ public class ElasticsearchClient {
 
       connectAsynchronously();
     }
+
+    this.restClient = this.createRestClient();
+  }
+
+  private RestHighLevelClient createRestClient() {
+    this.lowLevelRestClient = RestClient.builder(
+      new HttpHost(properties.getHost(), properties.getHttpPort(), "http")
+    ).build();
+
+    RestHighLevelClient restHighLevelClient = new RestHighLevelClient(this.lowLevelRestClient);
+
+    return restHighLevelClient;
   }
 
   /**
@@ -183,9 +204,10 @@ public class ElasticsearchClient {
     }
   }
 
-  public void close() {
+  public void close() throws IOException {
     if (client != null) {
       client.close();
+      this.lowLevelRestClient.close();
       log.info("Closed client {}", client.settings().get("node.name"));
       client = null;
       this.isClusterYellow = false;

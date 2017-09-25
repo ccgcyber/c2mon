@@ -20,6 +20,8 @@ public class ElasticsearchProperties {
    */
   private int port = 9300;
 
+  private int httpPort = 9200;
+
   /**
    * Name of the Elasticsearch cluster to connect to. Must be the same for all
    * nodes meant to lie inside the same cluster
