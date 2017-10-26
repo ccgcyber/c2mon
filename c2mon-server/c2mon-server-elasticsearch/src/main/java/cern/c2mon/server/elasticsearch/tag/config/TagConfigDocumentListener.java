@@ -17,6 +17,7 @@
 
 package cern.c2mon.server.elasticsearch.tag.config;
 
+import cern.c2mon.server.elasticsearch.client.ElasticsearchClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -35,34 +36,39 @@ import cern.c2mon.shared.client.configuration.ConfigConstants.Action;
 @Component
 public class TagConfigDocumentListener implements ConfigurationEventListener {
 
+  private final ElasticsearchClient elasticsearchClient;
+
   private final TagConfigDocumentIndexer indexer;
 
   private final TagConfigDocumentConverter converter;
 
   @Autowired
-  public TagConfigDocumentListener(final TagConfigDocumentIndexer indexer, final TagConfigDocumentConverter converter) {
+  public TagConfigDocumentListener(final ElasticsearchClient elasticsearchClient, final TagConfigDocumentIndexer indexer, final TagConfigDocumentConverter converter) {
+    this.elasticsearchClient = elasticsearchClient;
     this.indexer = indexer;
     this.converter = converter;
   }
 
   @Override
   public void onConfigurationEvent(Tag tag, Action action) {
-    try {
-      switch (action) {
-        case CREATE:
-          converter.convert(tag).ifPresent(indexer::indexTagConfig);
-          break;
-        case UPDATE:
-          converter.convert(tag).ifPresent(indexer::updateTagConfig);
-          break;
-        case REMOVE:
-          converter.convert(tag).ifPresent(indexer::removeTagConfig);
-          break;
-        default:
-          break;
+    if (this.elasticsearchClient.getProperties().isEnabled()) {
+      try {
+        switch (action) {
+          case CREATE:
+            converter.convert(tag).ifPresent(indexer::indexTagConfig);
+            break;
+          case UPDATE:
+            converter.convert(tag).ifPresent(indexer::updateTagConfig);
+            break;
+          case REMOVE:
+            converter.convert(tag).ifPresent(indexer::removeTagConfig);
+            break;
+          default:
+            break;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException("Error indexing tag configuration", e);
       }
-    } catch (Exception e) {
-      throw new RuntimeException("Error indexing tag configuration", e);
     }
   }
 }

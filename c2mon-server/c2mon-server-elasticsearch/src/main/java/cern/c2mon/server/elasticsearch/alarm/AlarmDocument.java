@@ -16,14 +16,14 @@
  *****************************************************************************/
 package cern.c2mon.server.elasticsearch.alarm;
 
-import java.io.IOException;
-import java.util.HashMap;
-
+import cern.c2mon.pmanager.IFallback;
+import cern.c2mon.pmanager.fallback.exception.DataFallbackException;
+import cern.c2mon.server.common.alarm.Alarm;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import cern.c2mon.pmanager.IFallback;
-import cern.c2mon.server.common.alarm.Alarm;
+import java.io.IOException;
+import java.util.HashMap;
 
 /**
  * Intermediate object (created from {@link Alarm} instances) used for direct
@@ -38,16 +38,24 @@ public class AlarmDocument extends HashMap<String, Object> implements IFallback 
   private static final ObjectMapper mapper = new ObjectMapper();
 
   @Override
+  public Object put(String key, Object value) {
+    if (key.equals("timestamp")) {
+      value = Long.valueOf(value.toString());
+    }
+    return super.put(key, value);
+  }
+
+  @Override
   public String getId() {
     return String.valueOf(this.get("id"));
   }
 
   @Override
-  public IFallback getObject(String line) {
+  public IFallback getObject(String line) throws DataFallbackException {
     try {
       return mapper.readValue(line, AlarmDocument.class);
     } catch (IOException e) {
-      throw new RuntimeException("Error reading line from fallback", e);
+      throw new DataFallbackException("Error reading line from fallback", e);
     }
   }
 

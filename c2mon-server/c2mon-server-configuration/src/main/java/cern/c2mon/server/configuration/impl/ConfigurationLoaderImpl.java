@@ -23,8 +23,11 @@ import java.sql.Timestamp;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
-import cern.c2mon.server.configuration.parser.exception.EntityDoesNotExistException;
 import lombok.extern.slf4j.Slf4j;
 import org.simpleframework.xml.Serializer;
 import org.simpleframework.xml.convert.AnnotationStrategy;
@@ -320,9 +323,24 @@ public class ConfigurationLoaderImpl implements ConfigurationLoader {
       clusterCache.acquireWriteLockOnKey(this.cachePersistenceLock);
       if (!isDBConfig && runInParallel(configElements)) {
         log.debug("Enter parallel configuration");
-        configElements.parallelStream().forEach(element ->
-            applyConfigurationElement(element, processLists, elementPlaceholder, daqReportPlaceholder, report, configId, configProgressMonitor));
-
+        ForkJoinPool forkJoinPool = new ForkJoinPool(10);
+        try {
+          //https://blog.krecan.net/2014/03/18/how-to-specify-thread-pool-for-java-8-parallel-streams/
+          forkJoinPool.submit(() ->
+              configElements.parallelStream().forEach(element ->
+                  applyConfigurationElement(element, processLists, elementPlaceholder, daqReportPlaceholder, report, configId, configProgressMonitor))
+          ).get(300, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            String errorMessage = "Error applying configuration elements in parallel, timeout after 5 minutes";
+            log.error(errorMessage, e);
+            report.addStatus(Status.FAILURE);
+            report.setStatusDescription(report.getStatusDescription() + errorMessage + "\n");
+        } catch (InterruptedException | ExecutionException e) {
+            String errorMessage = "Error applying configuration elements in parallel";
+            log.error(errorMessage, e);
+            report.addStatus(Status.FAILURE);
+            report.setStatusDescription(report.getStatusDescription() + errorMessage + "\n");
+        }
       } else {
         log.debug("Enter serialized configuration");
         configElements.stream().forEach(element ->
@@ -405,13 +423,15 @@ public class ConfigurationLoaderImpl implements ConfigurationLoader {
       }
     }
 
-    //LOGGER.info(configId + " Saving configuration ")
-    //save Configuration element status information in the DB tables
-    for (ConfigurationElement element : configElements) {
-      configurationDAO.saveStatusInfo(element);
+    if (isDBConfig) {
+      //save Configuration element status information in the DB tables
+      for (ConfigurationElement element : configElements) {
+        configurationDAO.saveStatusInfo(element);
+      }
+      //mark the Configuration as applied in the DB table, with timestamp set
+      configurationDAO.markAsApplied(configId);
     }
-    //mark the Configuration as applied in the DB table, with timestamp set
-    configurationDAO.markAsApplied(configId);
+
     log.info("Finished applying configuraton " + configId);
 
     report.normalize();
@@ -530,7 +550,6 @@ public class ConfigurationLoaderImpl implements ConfigurationLoader {
    *
    * @param element the details of the configuration action
    * @param elementReport report that should be set to failed if there is a problem
-   * @param changeId first free id to use in the sequence of changeIds, used for sending to DAQs *is increased by method*
    * @return list of DAQ configuration events; is never null but may be empty
    * @throws IllegalAccessException
    **/

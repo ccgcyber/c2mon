@@ -22,6 +22,8 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.powermock.reflect.Whitebox;
+import org.powermock.reflect.internal.WhiteboxImpl;
 import org.springframework.util.FileSystemUtils;
 
 import java.util.Collection;
@@ -49,7 +51,7 @@ public class ElasticsearchServiceTest {
     EquipmentCache equipmentCache = createNiceMock(EquipmentCache.class);
     SubEquipmentCache subequipmentCache = createNiceMock(SubEquipmentCache.class);
     TagConfigDocumentConverter converter = new TagConfigDocumentConverter(processCache, equipmentCache, subequipmentCache);
-    tagDocumentListener = new TagConfigDocumentListener(indexer, converter);
+    tagDocumentListener = new TagConfigDocumentListener(this.client, indexer, converter);
   }
 
   @BeforeClass
