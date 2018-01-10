@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.server</groupId>
     <artifactId>c2mon-server-parent</artifactId>
-    <version>1.8.29-SNAPSHOT</version>
+    <version>1.8.30-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-server-configuration</artifactId>
@@ -30,14 +30,6 @@
 
 
     <!-- 3rd party dependencies -->
-    <dependency>
-      <groupId>com.oracle</groupId>
-      <artifactId>ojdbc</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.oracle</groupId>
-      <artifactId>orai18n</artifactId>
-    </dependency>
     <dependency>
       <groupId>org.mybatis</groupId>
       <artifactId>mybatis-spring</artifactId>

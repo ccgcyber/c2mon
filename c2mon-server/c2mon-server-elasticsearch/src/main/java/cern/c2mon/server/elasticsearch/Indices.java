@@ -7,24 +7,24 @@ import cern.c2mon.server.elasticsearch.supervision.SupervisionEventDocument;
 import cern.c2mon.server.elasticsearch.tag.TagDocument;
 import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocument;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.ResourceAlreadyExistsException;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequestBuilder;
-import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexResponse;
+import org.elasticsearch.client.Requests;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.AutoConfigureOrder;
 import org.springframework.stereotype.Component;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Static utility singleton for working with Elasticsearch indices.
@@ -72,38 +72,40 @@ public class Indices {
    *
    * @return true if the index was successfully created, false otherwise
    */
-  public synchronized static boolean create(String indexName, String type, String mapping) {
-    if (exists(indexName)) {
-      return true;
+  public static boolean create(String indexName, String type, String mapping) {
+    synchronized (Indices.class) {
+      if (exists(indexName)) {
+        return true;
+      }
+
+      CreateIndexRequestBuilder builder = self.client.getClient().admin().indices().prepareCreate(indexName);
+      builder.setSettings(Settings.builder()
+          .put("number_of_shards", self.properties.getShardsPerIndex())
+          .put("number_of_replicas", self.properties.getReplicasPerShard())
+          .build());
+
+      if (mapping != null) {
+        builder.addMapping(type, mapping, XContentType.JSON);
+      }
+
+      log.debug("Creating new index with name {}", indexName);
+      boolean created;
+
+      try {
+        CreateIndexResponse response = builder.get();
+        created = response.isAcknowledged();
+      } catch (ResourceAlreadyExistsException ex) {
+        created = true;
+      }
+
+      self.client.waitForYellowStatus();
+
+      if (created) {
+        self.indexCache.add(indexName);
+      }
+
+      return created;
     }
-
-    CreateIndexRequestBuilder builder = self.client.getClient().admin().indices().prepareCreate(indexName);
-    builder.setSettings(Settings.builder()
-        .put("number_of_shards", self.properties.getShardsPerIndex())
-        .put("number_of_replicas", self.properties.getReplicasPerShard())
-        .build());
-
-    if (mapping != null) {
-      builder.addMapping(type, mapping, XContentType.JSON);
-    }
-
-    log.debug("Creating new index with name {}", indexName);
-    boolean created;
-
-    try {
-      CreateIndexResponse response = builder.get();
-      created = response.isAcknowledged();
-    } catch (ResourceAlreadyExistsException ex) {
-      created = true;
-    }
-
-    self.client.waitForYellowStatus();
-
-    if (created) {
-      self.indexCache.add(indexName);
-    }
-
-    return created;
   }
 
   /**
@@ -117,13 +119,49 @@ public class Indices {
    * @return true if the index exists, false otherwise
    */
   public static boolean exists(String indexName) {
-    if (self.indexCache.contains(indexName)) {
-      return true;
-    }
+    synchronized (Indices.class) {
+      boolean exists = self.indexCache.contains(indexName);
+      if (!exists) {
+        self.client.waitForYellowStatus();
+        IndexMetaData indexMetaData = self.client.getClient().admin().cluster()
+            .state(Requests.clusterStateRequest())
+            .actionGet()
+            .getState()
+            .getMetaData()
+            .index(indexName);
 
-    return false;
+        if (indexMetaData != null) {
+          self.indexCache.add(indexName);
+          exists = true;
+        }
+      }
+      return exists;
+    }
   }
 
+  /**
+   * Delete an index in Elasticsearch.
+   *
+   * @param indexName
+   *
+   * @return true if the request was acknowledged.
+   */
+  public static boolean delete(String indexName) {
+    synchronized (Indices.class) {
+      try {
+        DeleteIndexResponse response = self.client.getClient().admin().indices().delete(new DeleteIndexRequest(indexName)).get();
+        if (response.isAcknowledged()) {
+          self.indexCache.remove(indexName);
+          return true;
+        } else {
+          return false;
+        }
+      } catch (InterruptedException|ExecutionException e) {
+        log.error("Error while deleting index", e);
+        return false;
+      }
+    }
+  }
   /**
    * Generate an index for the given {@link TagDocument} based on its
    * timestamp.
