@@ -4,6 +4,8 @@ import cern.c2mon.client.core.config.C2monClientProperties;
 import cern.c2mon.server.cache.EquipmentCache;
 import cern.c2mon.server.cache.ProcessCache;
 import cern.c2mon.server.cache.SubEquipmentCache;
+import cern.c2mon.server.cache.TagFacadeGateway;
+import cern.c2mon.server.cache.common.TagFacadeGatewayImpl;
 import cern.c2mon.server.common.datatag.DataTagCacheObject;
 import cern.c2mon.server.elasticsearch.Indices;
 import cern.c2mon.server.elasticsearch.MappingFactory;
@@ -15,6 +17,8 @@ import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocumentIndexer;
 import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocumentListener;
 import cern.c2mon.shared.client.configuration.ConfigConstants;
 import org.apache.http.annotation.NotThreadSafe;
+import org.easymock.EasyMock;
+import org.easymock.Mock;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.node.NodeValidationException;
@@ -27,13 +31,17 @@ import org.powermock.reflect.internal.WhiteboxImpl;
 import org.springframework.util.FileSystemUtils;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.easymock.EasyMock.*;
 import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 @NotThreadSafe
 public class ElasticsearchServiceTest {
@@ -42,6 +50,8 @@ public class ElasticsearchServiceTest {
   private TagConfigDocumentListener tagDocumentListener;
   private C2monClientProperties properties = new C2monClientProperties();
   private static ElasticsearchProperties elasticsearchProperties = new ElasticsearchProperties();
+  @Mock
+  private TagFacadeGateway tagFacadeGateway;
 
   public ElasticsearchServiceTest() throws NodeValidationException {
     this.client = new ElasticsearchClientImpl(elasticsearchProperties);
@@ -51,7 +61,8 @@ public class ElasticsearchServiceTest {
     EquipmentCache equipmentCache = createNiceMock(EquipmentCache.class);
     SubEquipmentCache subequipmentCache = createNiceMock(SubEquipmentCache.class);
     TagConfigDocumentConverter converter = new TagConfigDocumentConverter(processCache, equipmentCache, subequipmentCache);
-    tagDocumentListener = new TagConfigDocumentListener(this.client, indexer, converter);
+    tagFacadeGateway = createNiceMock(TagFacadeGateway.class);
+    tagDocumentListener = new TagConfigDocumentListener(this.client, indexer, converter, tagFacadeGateway);
   }
 
   @BeforeClass
@@ -79,6 +90,11 @@ public class ElasticsearchServiceTest {
     }
   }
 
+  @Before
+  public void resetMocks() {
+    reset(tagFacadeGateway);
+  }
+
   @Test
   public void testSearchByMetadata() throws InterruptedException {
     try {
@@ -87,8 +103,9 @@ public class ElasticsearchServiceTest {
       String responsible = "responsible";
       DataTagCacheObject tag = new DataTagCacheObject(testUserTagId);
       tag.getMetadata().getMetadata().put(responsible, testUser);
+      expect(tagFacadeGateway.getAlarms(anyObject(DataTagCacheObject.class))).andReturn(Collections.emptyList()).times(2);
+      replay(tagFacadeGateway);
       tagDocumentListener.onConfigurationEvent(tag, ConfigConstants.Action.CREATE);
-
       Long tag1234Id = Double.doubleToLongBits(Math.random()) % 10000;
       String value1234 = "1234";
       tag = new DataTagCacheObject(tag1234Id);
@@ -126,6 +143,8 @@ public class ElasticsearchServiceTest {
       String tagname = "tagname";
       tag.setName(tagname);
       tag.getMetadata().getMetadata().put(metadataKey, testUser);
+      expect(tagFacadeGateway.getAlarms(anyObject(DataTagCacheObject.class))).andReturn(Collections.emptyList()).times(3);
+      replay(tagFacadeGateway);
       tagDocumentListener.onConfigurationEvent(tag, ConfigConstants.Action.CREATE);
 
       tag = new DataTagCacheObject(Double.doubleToLongBits(Math.random()) % 10000);
@@ -146,6 +165,19 @@ public class ElasticsearchServiceTest {
       Collection<Long> tagsForResponsibleUser = service.findTagsByNameAndMetadata(tagname, metadataKey, testUser);
       assertEquals("There should be one tag with given name and metadata", 1, tagsForResponsibleUser.size());
       assertEquals(testUserTagId, tagsForResponsibleUser.stream().findFirst().get());
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw e;
+    }
+  }
+  
+  @Test
+  public void testSearchByName() throws InterruptedException {
+    try {
+      ElasticsearchService service = new ElasticsearchService(properties);
+      Collection<Long> tagsForResponsibleUser = service.findByName("TEST");
+      assertNotNull("The tags collection should not be null", tagsForResponsibleUser);
+      assertEquals("There tags collection should be empty", 0, tagsForResponsibleUser.size());
     } catch (Exception e) {
       e.printStackTrace();
       throw e;

@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.server</groupId>
     <artifactId>c2mon-server-parent</artifactId>
-    <version>1.8.30-SNAPSHOT</version>
+    <version>1.8.31-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-server-cacheloading</artifactId>
@@ -55,6 +55,11 @@
     <dependency>
       <groupId>org.easymock</groupId>
       <artifactId>easymock</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>6.0.6</version>
     </dependency>
 
   </dependencies>

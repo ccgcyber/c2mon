@@ -8,18 +8,30 @@ For more details on a given release, please check also the [Milestone planning](
 
 ## [Unreleased]
 ### Added
+
+### Changed
+- Tidy temporary file handling in tests (#189)
+
+### Fixed
+- Fixed problem for local protyping that DAQ process could not recover from C2MON a server restart with embedded ActiveMQ broker (#191)
+
+
+## [1.8.30] - 2018-01-17
+### Added
 - Server: Documented all properties and default variables in the c2mon-server.properties file of the distribution tarball (#132)
 - Server: Introduced a common property for setting database url for all connections (backup db, history db): `c2mon.server.jdbc.url`
 - Documentation: Added introduction to 'DAQ API' section
+- Added JMX call to persist all Tags to tag-config index (#185)
 
 ### Changed
 - Documentation: Updated getting-started chapter (#133)
 - Server: Reduced DAQ value updater executor thread pool size to 100 instead of 250
 
-
 ### Fixed
 - Fixed dependency resolution problems when building against Maven Central
 - Server: When a tag update is received and C2MON detects that this tag is not registered in the Elasticsearch config index it will now add the docuement instead of throwing an error (#178)
+- Fix bug for Equipment deletion from Process, related to clustered cache
+- Client API: Fixed NPE in `TagService.findByName(String)` when tag name was not found (#187)
 
 ### Removed
 - Server: Removed Process name pattern matcher check constraint to allow any process name format (#186)
@@ -232,7 +244,8 @@ This patch contains bug fixes for the DAQ layer.
 ### Removed
 - Remove of EquipmentLogger concept from DAQ Core (#56)
 
-[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/23
+[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/24
+[1.8.30]: https://gitlab.cern.ch/c2mon/c2mon/milestones/23
 [1.8.29]: https://gitlab.cern.ch/c2mon/c2mon/milestones/22
 [1.8.27]: https://gitlab.cern.ch/c2mon/c2mon/milestones/19
 [1.8.26]: https://gitlab.cern.ch/c2mon/c2mon/milestones/21
