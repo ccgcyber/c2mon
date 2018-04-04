@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.client</groupId>
     <artifactId>c2mon-client</artifactId>
-    <version>1.8.31-SNAPSHOT</version>
+    <version>1.8.34-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-client-core</artifactId>
@@ -32,11 +32,6 @@
     <dependency>
       <groupId>org.apache.activemq</groupId>
       <artifactId>activemq-client</artifactId>
-    </dependency>
-    <!-- Required stay backward compatible to older ActiveMQ broker -->
-    <dependency>
-      <groupId>org.apache.activemq</groupId>
-      <artifactId>activemq-openwire-legacy</artifactId>
     </dependency>
     
     <!-- Runtime dependencies required to support HTTP via ActiveMQ -->
