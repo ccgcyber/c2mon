@@ -1,10 +1,11 @@
-# Change Log
+# Changelog
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 All issues referenced in parentheses can be consulted under [CERN GitLab](https://gitlab.cern.ch/c2mon/c2mon/issues).
 For more details on a given release, please check also the [Milestone planning](https://gitlab.cern.ch/c2mon/c2mon/milestones?state=all).
+
 
 ## [Unreleased]
 ### Added
@@ -13,10 +14,40 @@ For more details on a given release, please check also the [Milestone planning](
 
 ### Fixed
 
+## 1.8.38 - 2018-05-08
+### Fixed
+- Server: Fixed additional write lock problem related to rule configuration in cluster environment, which appeared during integration testing of [1.8.36]
+
+## 1.8.37 - BROKEN!
+Broken release!
+
+## [1.8.36] - 2018-05-07
+### Changed
+- Documentation: Updated [Database](https://c2mon.web.cern.ch/c2mon/docs/user-guide/server/database/) section and added [About](https://c2mon.web.cern.ch/c2mon/docs/about/CHANGELOG/) chapter
+
+### Fixed
+- Client API: Fixed NPE in `ControlTagConfigurationManagerImpl`, which occured when sending a configuration update on a control tag
+- Server: Removed write lock in `RuleTagCacheImpl`, which could cause in rare cases a deadlock during a rule configuration in cluster mode (only!)
+- Server: Supressing invalid warning message during Process Commfault value persistence to Elasticsearch (#209)
+
+
+## [1.8.35] - 2018-04-26
+### Changed
+- Documentation: Upgrade to MkDocs 0.17.3 and major refactoring of C2MON documentation structure (!182)
+
+### Fixed
+- Server, Elasticsearch: Added missing argument for re-index tag config operation (#194)
+- Fixed equipment configuration bug by adding 'cache put' command (!184)
+
+
+## [1.8.34] - 2018-04-13
+### Fixed
+-  Server: Fixed bug in DAQ process XML document generation related to deleted Equipments (#207)
+
 
 ## [1.8.33] - 2018-03-19
 ### Changed
-- DAQ: Small improvements in logback.xml 
+- DAQ: Small improvements in logback.xml
 
 ### Fixed
 - Server: Fixed minor issue in MySQL schema (#193)
@@ -279,7 +310,11 @@ This patch contains bug fixes for the DAQ layer.
 ### Removed
 - Remove of EquipmentLogger concept from DAQ Core (#56)
 
-[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/27
+
+[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/30
+[1.8.36]: https://gitlab.cern.ch/c2mon/c2mon/milestones/29
+[1.8.35]: https://gitlab.cern.ch/c2mon/c2mon/milestones/28
+[1.8.34]: https://gitlab.cern.ch/c2mon/c2mon/milestones/27
 [1.8.33]: https://gitlab.cern.ch/c2mon/c2mon/milestones/26
 [1.8.32]: https://gitlab.cern.ch/c2mon/c2mon/milestones/25
 [1.8.31]: https://gitlab.cern.ch/c2mon/c2mon/milestones/24
@@ -300,4 +335,3 @@ This patch contains bug fixes for the DAQ layer.
 [1.8.8]: https://gitlab.cern.ch/c2mon/c2mon/milestones/9
 [1.8.7]: https://gitlab.cern.ch/c2mon/c2mon/milestones/8
 [1.8.6]: https://gitlab.cern.ch/c2mon/c2mon/milestones/7
-
