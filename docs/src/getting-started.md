@@ -25,7 +25,7 @@ Alternatively to HSQLDB you can also use [MySQL v5.1.38](https://www.mysql.com/)
 
 To run the C2MON tarball distribution you need at least Java 1.8 installed on your machine.
 
-The [C2MON server distribution tarball](https://nexus.web.cern.ch/nexus/content/groups/public/cern/c2mon/server/c2mon-server/) can be downloaded from [here](https://nexus.web.cern.ch/nexus/content/groups/public/cern/c2mon/server/c2mon-server/).
+The [C2MON server distribution tarball](https://nexus.web.cern.ch/nexus/#nexus-search;gav%7Ecern.c2mon.server%7Ec2mon-server%7E%7Etar.gz%7E) can be downloaded from [here](https://nexus.web.cern.ch/nexus/content/groups/public/cern/c2mon/server/c2mon-server/).
 
 We recommend to always use the latest stable version listed in the [CHANGELOG](/about/CHANGELOG/) file.
 
@@ -146,6 +146,8 @@ $ ./c2mon-web-ui.sh start
 Starting C2MON web UI:     [  OK  ]
 ```
 
+You can now consult the C2MON Web User Interface on http://localhost:8080/c2mon-web-ui/
+
 ### Using the Docker image
 
 We push the c2mon-web-ui Docker images to the [CERN Docker registry](https://gitlab.cern.ch/c2mon/c2mon-web-ui/container_registry).
@@ -154,6 +156,8 @@ To run the image:
 ```bash
 docker run --rm --name web-ui -ti --link c2mon:c2mon -p 0.0.0.0:8080:8080 gitlab-registry.cern.ch/c2mon/c2mon-web-ui
 ```
+
+You can now consult the C2MON Web User Interface on http://localhost:8080/c2mon-web-ui/
 
 <!-- ### Inspecting the data
 
