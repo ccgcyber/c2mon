@@ -14,6 +14,21 @@ For more details on a given release, please check also the [Milestone planning](
 
 ### Fixed
 
+
+## [1.8.39] - 2018-10-16
+### Added
+- Added string data type support to JEC protocol address class (#214)
+- Enabled JMX support for embedded JMS broker
+- Added openshift template draft for Docker deployment
+
+### Changed
+- Client: Search by tag name in DAQ is now case insensitive
+- Time-to-live of JMS messages is reduced to one day (and 10 minutes for alive messages) (#220)
+
+### Fixed
+- Server: Fixed value mapping problem in Elasticsearch plugin (#222)
+- Documentation: Typo correction and fixes in example test code of DAQ module testing guide
+
 ## 1.8.38 - 2018-05-08
 ### Fixed
 - Server: Fixed additional write lock problem related to rule configuration in cluster environment, which appeared during integration testing of [1.8.36]
@@ -311,7 +326,8 @@ This patch contains bug fixes for the DAQ layer.
 - Remove of EquipmentLogger concept from DAQ Core (#56)
 
 
-[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/30
+[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/31
+[1.8.39]: https://gitlab.cern.ch/c2mon/c2mon/milestones/30
 [1.8.36]: https://gitlab.cern.ch/c2mon/c2mon/milestones/29
 [1.8.35]: https://gitlab.cern.ch/c2mon/c2mon/milestones/28
 [1.8.34]: https://gitlab.cern.ch/c2mon/c2mon/milestones/27
