@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.server</groupId>
     <artifactId>c2mon-server-parent</artifactId>
-    <version>1.8.40-SNAPSHOT</version>
+    <version>1.9.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-server-common</artifactId>
@@ -34,10 +34,6 @@
 
     <!-- 3rd party dependencies -->
     <dependency>
-      <groupId>org.apache.activemq</groupId>
-      <artifactId>activemq-broker</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-tx</artifactId>
     </dependency>
@@ -46,32 +42,17 @@
       <artifactId>spring-test</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-jms</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-jdbc</artifactId>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter</artifactId>
+      <artifactId>spring-boot-starter-activemq</artifactId>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-configuration-processor</artifactId>
     </dependency>
-    
-    <!-- Bean Validation provider -->
-    <dependency>
-        <groupId>org.hibernate</groupId>
-        <artifactId>hibernate-validator</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.glassfish.web</groupId>
-      <artifactId>javax.el</artifactId>
-    </dependency>
-    
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>

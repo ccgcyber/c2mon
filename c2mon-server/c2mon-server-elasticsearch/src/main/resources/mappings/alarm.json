@@ -40,10 +40,17 @@
       "type": "object",
       "dynamic": "true"
     },
+    "oscillating": {
+      "type": "boolean"
+    },
     "tagId": {
       "type": "long"
     },
     "timestamp": {
+      "type": "date",
+      "format": "epoch_millis"
+    },
+    "sourceTimestamp": {
       "type": "date",
       "format": "epoch_millis"
     }

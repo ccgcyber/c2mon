@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.shared</groupId>
     <artifactId>c2mon-shared</artifactId>
-    <version>1.8.40-SNAPSHOT</version>
+    <version>1.9.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-shared-client</artifactId>
@@ -32,6 +32,11 @@
     <dependency>
       <groupId>cern.c2mon.shared</groupId>
       <artifactId>c2mon-shared-persistence-manager</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
     </dependency>
 
     <!-- 3rd-party dependencies -->
@@ -65,14 +70,6 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.hibernate</groupId>
-      <artifactId>hibernate-validator</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.glassfish.web</groupId>
-      <artifactId>javax.el</artifactId>
     </dependency>
 
     <!-- Test dependencies -->

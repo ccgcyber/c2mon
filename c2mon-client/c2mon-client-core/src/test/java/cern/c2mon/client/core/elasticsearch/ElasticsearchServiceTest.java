@@ -5,31 +5,27 @@ import cern.c2mon.server.cache.EquipmentCache;
 import cern.c2mon.server.cache.ProcessCache;
 import cern.c2mon.server.cache.SubEquipmentCache;
 import cern.c2mon.server.cache.TagFacadeGateway;
-import cern.c2mon.server.cache.common.TagFacadeGatewayImpl;
 import cern.c2mon.server.common.datatag.DataTagCacheObject;
-import cern.c2mon.server.elasticsearch.Indices;
+import cern.c2mon.server.elasticsearch.IndexManagerRest;
 import cern.c2mon.server.elasticsearch.MappingFactory;
-import cern.c2mon.server.elasticsearch.client.ElasticsearchClient;
-import cern.c2mon.server.elasticsearch.client.ElasticsearchClientImpl;
+import cern.c2mon.server.elasticsearch.client.ElasticsearchClientRest;
 import cern.c2mon.server.elasticsearch.config.ElasticsearchProperties;
 import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocumentConverter;
 import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocumentIndexer;
 import cern.c2mon.server.elasticsearch.tag.config.TagConfigDocumentListener;
+import cern.c2mon.server.elasticsearch.util.EmbeddedElasticsearchManager;
 import cern.c2mon.shared.client.configuration.ConfigConstants;
 import org.apache.http.annotation.NotThreadSafe;
-import org.easymock.EasyMock;
 import org.easymock.Mock;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.admin.indices.flush.FlushRequest;
 import org.elasticsearch.node.NodeValidationException;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.powermock.reflect.Whitebox;
-import org.powermock.reflect.internal.WhiteboxImpl;
 import org.springframework.util.FileSystemUtils;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
@@ -38,46 +34,50 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.easymock.EasyMock.*;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 @NotThreadSafe
 public class ElasticsearchServiceTest {
 
-  private ElasticsearchClientImpl client;
+  private static ElasticsearchProperties elasticsearchProperties = new ElasticsearchProperties();
+
   private TagConfigDocumentListener tagDocumentListener;
   private C2monClientProperties properties = new C2monClientProperties();
-  private static ElasticsearchProperties elasticsearchProperties = new ElasticsearchProperties();
+  private ElasticsearchClientRest client;
+  private IndexManagerRest indexManagerRest;
+
   @Mock
   private TagFacadeGateway tagFacadeGateway;
 
   public ElasticsearchServiceTest() throws NodeValidationException {
-    this.client = new ElasticsearchClientImpl(elasticsearchProperties);
-    Indices mustBeCreatedButVariableNotUsed = new Indices(this.client, elasticsearchProperties);
-    TagConfigDocumentIndexer indexer = new TagConfigDocumentIndexer(client, elasticsearchProperties);
+    client = new ElasticsearchClientRest(elasticsearchProperties);
+    indexManagerRest = new IndexManagerRest(client);
+    TagConfigDocumentIndexer indexer = new TagConfigDocumentIndexer(elasticsearchProperties, indexManagerRest);
     ProcessCache processCache = createNiceMock(ProcessCache.class);
     EquipmentCache equipmentCache = createNiceMock(EquipmentCache.class);
     SubEquipmentCache subequipmentCache = createNiceMock(SubEquipmentCache.class);
     TagConfigDocumentConverter converter = new TagConfigDocumentConverter(processCache, equipmentCache, subequipmentCache);
     tagFacadeGateway = createNiceMock(TagFacadeGateway.class);
-    tagDocumentListener = new TagConfigDocumentListener(this.client, indexer, converter, tagFacadeGateway);
+    tagDocumentListener = new TagConfigDocumentListener(client, indexer, converter, tagFacadeGateway);
   }
 
   @BeforeClass
+  public static void setUpClass() throws IOException, InterruptedException {
+    EmbeddedElasticsearchManager.start(elasticsearchProperties);
+  }
+
   @AfterClass
-  public static void cleanup() {
-    FileSystemUtils.deleteRecursively(new java.io.File(elasticsearchProperties.getEmbeddedStoragePath()));
+  public static void tearDownClass() {
+    EmbeddedElasticsearchManager.stop();
   }
 
   @Before
   public void setupElasticsearch() throws InterruptedException, NodeValidationException {
     try {
       CompletableFuture<Void> nodeReady = CompletableFuture.runAsync(() -> {
-        client.waitForYellowStatus();
-        client.getClient().admin().indices().delete(new DeleteIndexRequest(elasticsearchProperties.getTagConfigIndex()));
-        Indices.create(elasticsearchProperties.getTagConfigIndex(), "tag_config", MappingFactory.createTagConfigMapping());
+        EmbeddedElasticsearchManager.getEmbeddedNode().deleteIndex(elasticsearchProperties.getTagConfigIndex());
+        indexManagerRest.create(elasticsearchProperties.getTagConfigIndex(), MappingFactory.createTagConfigMapping());
         try {
           Thread.sleep(1000); //it takes some time for the index to be recreated
         } catch (InterruptedException e) {
@@ -113,18 +113,18 @@ public class ElasticsearchServiceTest {
       tag.getMetadata().getMetadata().put(key1234, value1234);
       tagDocumentListener.onConfigurationEvent(tag, ConfigConstants.Action.CREATE);
 
-      client.getClient().admin().indices().flush(new FlushRequest()).actionGet();
+      EmbeddedElasticsearchManager.getEmbeddedNode().refreshIndices();
       Thread.sleep(10000);
 
-      ElasticsearchService service = new ElasticsearchService(properties);
+      ElasticsearchService service = new ElasticsearchService(properties, "c2mon");
 
-      assertEquals("There should be 2 tags, one for responsible and one for 1234", 2, service.getDistinctMetadataKeys().size());
+      assertEquals("There should be 2 tags, one for responsible and one for 1234", 2, service.getDistinctTagMetadataKeys().size());
 
-      Collection<Long> tagsForResponsibleUser = service.findByMetadata(responsible, testUser);
+      Collection<Long> tagsForResponsibleUser = service.findTagsByMetadata(responsible, testUser);
       assertEquals("There should be one tag with responsible user set to requested value", 1, tagsForResponsibleUser.size());
       assertEquals(testUserTagId, tagsForResponsibleUser.stream().findFirst().get());
 
-      Collection<Long> tags1234 = service.findByMetadata(key1234, value1234);
+      Collection<Long> tags1234 = service.findTagsByMetadata(key1234, value1234);
       assertEquals("There should be one tag with 1234 parameter set to requested value", 1, tags1234.size());
       assertEquals(tag1234Id, tags1234.stream().findFirst().get());
     } catch (Exception e) {
@@ -157,10 +157,10 @@ public class ElasticsearchServiceTest {
       tag.getMetadata().getMetadata().put(metadataKey, testUser);
       tagDocumentListener.onConfigurationEvent(tag, ConfigConstants.Action.CREATE);
 
-      client.getClient().admin().indices().flush(new FlushRequest()).actionGet();
+      EmbeddedElasticsearchManager.getEmbeddedNode().refreshIndices();
       Thread.sleep(10000);
 
-      ElasticsearchService service = new ElasticsearchService(properties);
+      ElasticsearchService service = new ElasticsearchService(properties, "c2mon");
 
       Collection<Long> tagsForResponsibleUser = service.findTagsByNameAndMetadata(tagname, metadataKey, testUser);
       assertEquals("There should be one tag with given name and metadata", 1, tagsForResponsibleUser.size());
@@ -174,8 +174,8 @@ public class ElasticsearchServiceTest {
   @Test
   public void testSearchByName() throws InterruptedException {
     try {
-      ElasticsearchService service = new ElasticsearchService(properties);
-      Collection<Long> tagsForResponsibleUser = service.findByName("TEST");
+      ElasticsearchService service = new ElasticsearchService(properties, "c2mon");
+      Collection<Long> tagsForResponsibleUser = service.findTagsByName("TEST");
       assertNotNull("The tags collection should not be null", tagsForResponsibleUser);
       assertEquals("There tags collection should be empty", 0, tagsForResponsibleUser.size());
     } catch (Exception e) {

@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
  *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
@@ -16,25 +16,19 @@
  *****************************************************************************/
 package cern.c2mon.client.core;
 
-import cern.c2mon.client.core.config.C2monAutoConfiguration;
-
-import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.boot.Banner;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.ConfigurableApplicationContext;
-
-import cern.c2mon.client.core.service.impl.CommandServiceImpl;
-import cern.c2mon.client.core.manager.SupervisionServiceImpl;
-import cern.c2mon.client.core.service.*;
-
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.stereotype.Component;
+
+import cern.c2mon.client.core.config.C2monAutoConfiguration;
+import cern.c2mon.client.core.elasticsearch.ElasticsearchService;
+import cern.c2mon.client.core.service.*;
 
 /**
  * This class is the main facade for all applications using the
@@ -54,31 +48,34 @@ import org.springframework.stereotype.Component;
 public class C2monServiceGateway implements ApplicationContextAware {
 
   /** The SPRING application context, which can be used as parent context */
-  private static ApplicationContext context = null;
+  private static ApplicationContext context;
 
   /**
    * The maximum amount of time in milliseconds which the C2MON ServiceGateway shall
    * wait before aborting waiting that the connection to the C2MON server is established.
    */
-  private static final Long MAX_INITIALIZATION_TIME = 60000L;
+  private static final Long MAX_INITIALIZATION_TIME = 60_000L;
 
   /** Static reference to the <code>C2monCommandManager</code> singleton instance */
-  private static CommandServiceImpl commandServiceImpl = null;
+  private static CommandService commandService;
 
   /** Static reference to the <code>TagService</code> singleton instance */
-  private static TagService tagService = null;
+  private static TagService tagService;
 
   /** Static reference to the <code>ConfigurationService</code> singleton instance */
-  private static ConfigurationService configurationService = null;
+  private static ConfigurationService configurationService;
 
   /** Static reference to the <code>AlarmService</code> singleton instance */
-  private static AlarmService alarmService = null;
+  private static AlarmService alarmService;
 
   /** Static reference to the <code>StatisticsService</code> singleton instance */
-  private static StatisticsService statisticsService = null;
+  private static StatisticsService statisticsService;
 
-  /** Static reference to the <code>C2monSupervisionManager</code> singleton instance */
-  private static SupervisionServiceImpl supervisionServiceImpl = null;
+  /** Static reference to the <code>SupervisionService</code> singleton instance */
+  private static SupervisionService supervisionService;
+
+  /** Static reference to the <code>ElasticsearchService</code> singleton instance */
+  private static ElasticsearchService elasticsearchService;
 
   /**
    * Protected default constructor
@@ -102,8 +99,7 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static CommandService getCommandService() {
     startC2monClientSynchronous();
-    
-    return commandServiceImpl;
+    return commandService;
   }
 
   /**
@@ -112,7 +108,6 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static AlarmService getAlarmService() {
     startC2monClientSynchronous();
-
     return alarmService;
   }
 
@@ -122,7 +117,6 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static StatisticsService getStatisticsService() {
     startC2monClientSynchronous();
-
     return statisticsService;
   }
 
@@ -132,7 +126,6 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static ConfigurationService getConfigurationService() {
     startC2monClientSynchronous();
-
     return configurationService;
   }
 
@@ -143,7 +136,6 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static TagService getTagService() {
     startC2monClientSynchronous();
-
     return tagService;
   }
 
@@ -155,8 +147,16 @@ public class C2monServiceGateway implements ApplicationContextAware {
    */
   public static SupervisionService getSupervisionService() {
     startC2monClientSynchronous();
-    
-    return supervisionServiceImpl;
+    return supervisionService;
+  }
+
+  /**
+   * @return The C2MON Elasticsearch service, which provides
+   *         methods for making advanced tag and alarm searches.
+   */
+  public static ElasticsearchService getElasticsearchService() {
+    startC2monClientSynchronous();
+    return elasticsearchService;
   }
 
   /**
@@ -217,7 +217,7 @@ public class C2monServiceGateway implements ApplicationContextAware {
       log.info("Waiting for C2MON server connection (max " + MAX_INITIALIZATION_TIME / 1000  + " sec)...");
 
       Long startTime = System.currentTimeMillis();
-      while (!supervisionServiceImpl.isServerConnectionWorking()) {
+      while (!supervisionService.isServerConnectionWorking()) {
         try { Thread.sleep(200); } catch (InterruptedException ie) { /* Do nothing */ }
         if (System.currentTimeMillis() - startTime >= MAX_INITIALIZATION_TIME) {
           throw new RuntimeException(
@@ -236,13 +236,13 @@ public class C2monServiceGateway implements ApplicationContextAware {
    * @param context the application context
    */
   private static void initiateGatewayFields(final ApplicationContext context) {
-    supervisionServiceImpl = context.getBean(SupervisionServiceImpl.class);
-    commandServiceImpl = context.getBean(CommandServiceImpl.class);
-
+    supervisionService = context.getBean(SupervisionService.class);
+    commandService = context.getBean(CommandService.class);
     alarmService = context.getBean(AlarmService.class);
     configurationService = context.getBean(ConfigurationService.class);
     statisticsService = context.getBean(StatisticsService.class);
     tagService = context.getBean(TagService.class);
+    elasticsearchService = context.getBean(ElasticsearchService.class);
   }
 
   /**

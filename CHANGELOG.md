@@ -3,16 +3,114 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-All issues referenced in parentheses can be consulted under [CERN GitLab](https://gitlab.cern.ch/c2mon/c2mon/issues).
-For more details on a given release, please check also the [Milestone planning](https://gitlab.cern.ch/c2mon/c2mon/milestones?state=all).
-
+All issues referenced in parentheses can be consulted under [CERN JIRA](https://its.cern.ch/jira/projects/CM).
+For more details on a given release, please check also the [version planning](https://its.cern.ch/jira/projects/CM/versions).
 
 ## [Unreleased]
 ### Added
+- Server: Added support for Elasticsearch 6.x (CM-144)
+- Server: Integrated Elasticsearch REST client
+- Alarm: Added support for alarms activation outside of a given range (CM-237)
 
 ### Changed
+- Client API: Added possibility to define credentials for making queries to Elasticsearch (CM-232)
+- Documentation is now build with Jekyll instead of MkDocs
+- Alarm: Code refactoring to allow creating custom alarm conditions (CM-239). More info in the [documentation](https://c2mon.web.cern.ch/c2mon/docs/user-guide/client-api/configuration-api.html)
 
 ### Fixed
+- Client API: Fixed Elasticsearch tests for C2MON client API (CM-230)
+
+### Deprecated
+- Client API: Renamed some of the ElasticsearchService methods. Old method names still exist but are marked as deprecated.
+
+
+## 1.9.2 - 2019-08-28
+### Changed
+- Server:  Increase sleeping time to 3 sec before trying to reconnect ES, if it is not yet in yellow or green state (CM-215)
+
+### Fixed
+- Server: Fixed a dependency problem introduced with [elasticsearch-cluster-runner](https://github.com/codelibs/elasticsearch-cluster-runner) that prevented to start Elasticsearch (CM-215)
+
+## 1.9.1 - 2019-08-28
+**Broken build**
+
+## [1.9.0] - 2019-08-09
+
+**C2MON depends now on Spring 5!** Please upgrade accordingly your client applications and make sure you use the same Spring version as specified in the [Maven POM](pom.xml).
+
+We also migrated our issue tracking system from Gitlab to [JIRA](https://its.cern.ch/jira/projects/CM). Furthermore, users from outside of CERN have now the possiblity to report issues directly on [GitHub](https://github.com/c2mon/c2mon/issues).
+
+### Changed
+- Upgrade of Spring dependencies to 5.1.2.RELEASE and for Spring Boot to 2.1.0.RELEASE (#228)
+
+### Fixed
+- Client API: Since last ActiveMQ upgrade clients were not anymore correctly informed about JMS broker disconnection (#273)
+- Client API: Fixed a JMS resource bug related to the configuration queue where consumers were never deleted (#266)
+- Deployment: Updated C2MON Docker image and Kubernetes files to match the versions in production (#259, #269, #271)
+- Server: Fixed ES Unit tests and switched to [elasticsearch-cluster-runner](https://github.com/codelibs/elasticsearch-cluster-runner) to start the embedded Elasticsearch instance (CM-215)
+- Server: A major refactoring of the Alarm oscillation feature was done since is it was not correctly working when changing the default properties. Many addition tests were written to make sure that the logic is finally water-proof (CM-219).
+
+
+## 1.8.45 - 2019-06-07
+### Fixed
+- Server: Prevent `NullPointerException` when cloning Metadata with `null` values (#270)
+
+
+## 1.8.44 - 2019-06-06
+### Fixed
+- Server: Remove Terracotta bulk load calls as batch loading of data tag into the cache fails randomly due to this (#268)
+- Server: When reloading the cache from the backup database the internal alarm oscillation fields are wrongly initialized (#267)
+
+
+## [1.8.43] - 2019-06-04
+### Added
+- Server: Added a warning log message that informs every minute how many alarms are currently oscillating. In case of no oscillating alarms, only a debug message is logged.
+- Deployment: Added Grafana to C2MON's Kubernetes configuration as well as predefined sample dashboards (!219)
+- Client API: Added source timestamp to client alarm object (#237)
+- Elasticsearch: Added alarm ids to ES tag document (#265)
+
+
+## [1.8.42] - 2019-05-28
+
+### Fixed
+- Alarm oscillation feature introduced as alpha version in [1.8.40] passed now all internal CERN stress test criterias and can be considered as stable (#145)
+- Corrected a misreferenced property name in `c2mon-server.properties` file (#261)
+
+
+## [1.8.41] - 2019-05-09
+
+### Added
+- Client API: Added method to clear local command cache (22abcb48)
+- Client API: Added methods to `SupervisionService` for retrieving process and (sub-)equipment information from local cache (#238)
+- Server, Client API: Added source timestamp to alarm object (#237)
+- Server: Added dedicated alarm logger to keep track of alarm updates in a separate log file (#229)
+
+### Changed
+- Cient API: Set ActiveMQ prefetch limit to 100 to avoid slow consumer problem (#240)
+- Updated C2MON Docker examples for Kubernetes (#205)
+
+### Fixed
+- Server: Fixed `clone()` method of `AlarmCacheObject` (5bf7a831)
+- Server: Fixed alarm state mapping to `Boolean` for database and source timestamp indexing for ElasticSearch (1627915c)
+- Server: Fixed bugs in alarm oscillation control logic introduced with last release (#233, #243, #246, #248, #145)
+- Server: Fixed problem of alarm history which logged active alarms several times with the same timestamp (#205)
+- Client API: ActiveMQ prefetch limit is now set in the code to 100 to avoid slow consumer problems (#240)
+
+### Removed
+- Removed dependency to `javax.el` validator annotations (#249)
+
+## [1.8.40] - 2019-02-01
+**Please note**,  upgrading to this version requires changes in the database schema. This was necessary in order to implement the alarm oscillation control feature (see #145).
+
+### Added
+- Server: Added generic oscillation control for alarms (#145)
+
+### Changed
+- DAQ: Improved logging for multi-equipment DAQs by giving threads the name of the corresponding equipment (#224)
+
+### Fixed
+- Server: Fixed ElasticSearch mapping for Boolean tags on numeric value field, which was always set to 1 (#223)
+- Server: Resolved bug preventing C2MON server to start without Elasticsearch logging (#218)
 
 
 ## [1.8.39] - 2018-10-16
@@ -326,7 +424,12 @@ This patch contains bug fixes for the DAQ layer.
 - Remove of EquipmentLogger concept from DAQ Core (#56)
 
 
-[Unreleased]: https://gitlab.cern.ch/c2mon/c2mon/milestones/31
+[Unreleased]: https://its.cern.ch/jira/projects/CM/versions
+[1.9.0]: https://its.cern.ch/jira/projects/CM/versions/31979
+[1.8.43]: https://gitlab.cern.ch/c2mon/c2mon/milestones/36
+[1.8.42]: https://gitlab.cern.ch/c2mon/c2mon/milestones/35
+[1.8.41]: https://gitlab.cern.ch/c2mon/c2mon/milestones/34
+[1.8.40]: https://gitlab.cern.ch/c2mon/c2mon/milestones/31
 [1.8.39]: https://gitlab.cern.ch/c2mon/c2mon/milestones/30
 [1.8.36]: https://gitlab.cern.ch/c2mon/c2mon/milestones/29
 [1.8.35]: https://gitlab.cern.ch/c2mon/c2mon/milestones/28

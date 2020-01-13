@@ -1,6 +1,26 @@
+/******************************************************************************
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
+ * <p/>
+ * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
+ * C2MON is free software: you can redistribute it and/or modify it under the
+ * terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation, either version 3 of the license.
+ * <p/>
+ * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
+ * more details.
+ * <p/>
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
 package cern.c2mon.client.core.elasticsearch;
 
-import cern.c2mon.client.core.config.C2monClientProperties;
+import java.io.IOException;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.searchbox.client.JestClient;
@@ -15,12 +35,10 @@ import io.searchbox.core.search.aggregation.DateHistogramAggregation.DateHistogr
 import io.searchbox.indices.mapping.GetMapping;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import cern.c2mon.client.core.config.C2monClientProperties;
 
 /**
  * @author Justin Lewis Salmon
@@ -37,15 +55,19 @@ public class ElasticsearchService {
 
   private final String alarmIndex;
 
+  private final int maxResults;
+
   @Autowired
-  public ElasticsearchService(C2monClientProperties properties) {
-    this.timeSeriesIndex = properties.getElasticsearch().getIndexPrefix() + "-tag*";
-    this.configIndex = properties.getElasticsearch().getTagConfigIndex();
-    this.alarmIndex = properties.getElasticsearch().getIndexPrefix() + "-alarm*";
+  public ElasticsearchService(C2monClientProperties properties, @Value("${c2mon.domain}") String domain) {
+    this.timeSeriesIndex = domain + "-tag*";
+    this.configIndex = domain + "-tag-config";
+    this.alarmIndex = domain + "-alarm*";
+    this.maxResults = properties.getElasticsearch().getMaxResults();
 
     JestClientFactory factory = new JestClientFactory();
     factory.setHttpClientConfig(new HttpClientConfig.Builder(properties.getElasticsearch().getUrl())
         .multiThreaded(true)
+        .defaultCredentials(properties.getElasticsearch().getUsername(), properties.getElasticsearch().getPassword())
         .build());
     client = factory.getObject();
   }
@@ -63,7 +85,7 @@ public class ElasticsearchService {
    *                  are "auto", "1s", "1m", "1h", "none"
    * @return list of [timestamp (ms), value] pairs
    */
-  public List<Object[]> getHistory(Long id, Long min, Long max, String aggregate) {
+  public List<Object[]> getTagHistory(Long id, Long min, Long max, String aggregate) {
     if (aggregate.equals("none")) {
       return getRawHistory(id, min, max);
     } else {
@@ -75,20 +97,8 @@ public class ElasticsearchService {
     // Figure out the right interval
     String interval = aggregate.equals("auto") ? getInterval(min, max) : aggregate;
     log.info("Using interval: " + interval);
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(termQuery("id", id))
-//        .size(0)
-//        .aggregation(AggregationBuilders.filter("time-range")
-//            .filter(rangeQuery("timestamp").from(min).to(max)).subAggregation(
-//                AggregationBuilders.dateHistogram("events-per-interval")
-//                    .field("timestamp")
-//                    .interval(new DateHistogramInterval(interval))
-//                    .subAggregation(
-//                        AggregationBuilders.avg("avg-value").field("value")
-//                    )));
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
-        "  \"size\" : 0,\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"term\" : {\n" +
         "      \"id\" : %d\n" +
@@ -174,15 +184,8 @@ public class ElasticsearchService {
   }
 
   private List<Object[]> getRawHistory(Long id, Long min, Long max) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(boolQuery()
-//        .must(termQuery("id", id))
-//        .must(rangeQuery("timestamp").from(min).to(max)))
-//        .sort("timestamp", SortOrder.ASC)
-//        .size(1000);
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
-        "  \"size\" : 1000,\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"bool\" : {\n" +
         "      \"must\" : [ {\n" +
@@ -231,7 +234,7 @@ public class ElasticsearchService {
    * @param <T>             type of output format
    * @return converted query results
    */
-  public <T> T findByQuery(String query, Function<SearchResult, T> outputConverter, String indexName, String errorMessage) {
+  public <T> T findTagsByQuery(String query, Function<SearchResult, T> outputConverter, String indexName, String errorMessage) {
     Search search = new Search.Builder(query).addIndex(indexName).build();
     try {
       SearchResult result = client.execute(search);
@@ -248,12 +251,6 @@ public class ElasticsearchService {
    * @return a list of tag ids
    */
   public List<Long> getTopTags(Integer size) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.aggregation(AggregationBuilders.terms("group-by-id")
-//        .field("id")
-//        .size(size))
-//        .sort("timestamp", SortOrder.DESC);
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
         "  \"sort\" : [ {\n" +
         "    \"timestamp\" : {\n" +
@@ -274,7 +271,7 @@ public class ElasticsearchService {
             .stream()
             .map(bucket -> Long.valueOf(bucket.getKey()))
             .collect(Collectors.toList()));
-    return findByQuery(query, converter, timeSeriesIndex, "Error querying top most active tags");
+    return findTagsByQuery(query, converter, timeSeriesIndex, "Error querying top most active tags");
   }
 
   /**
@@ -285,7 +282,7 @@ public class ElasticsearchService {
    * @return list of tag ids returned from elasticsearch
    */
   public Collection<Long> findTagsByQuery(String query, String errorMessage) {
-    Function<SearchResult, Collection<Long>> converter = 
+    Function<SearchResult, Collection<Long>> converter =
         result -> {
           if (!result.isSucceeded()) {
             return new ArrayList<>();
@@ -296,18 +293,12 @@ public class ElasticsearchService {
                 .collect(Collectors.toList()));
           }
         };
-    return findByQuery(query, converter, configIndex, errorMessage);
+    return findTagsByQuery(query, converter, configIndex, errorMessage);
   }
 
   public Collection<Long> findTagsByNameAndMetadata(String tagNameRegex, String key, String value) {
-//  SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//  searchSourceBuilder
-//          .query(boolQuery()
-//                    .must(regexpQuery("name", tagNameRegex))
-//                    .must(matchQuery("metadata." + key, value))
-//            );
-//  String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"bool\" : {\n" +
         "      \"must\" : [ {\n" +
@@ -320,8 +311,7 @@ public class ElasticsearchService {
         "      }, {\n" +
         "        \"match\" : {\n" +
         "          \"metadata.%s\" : {\n" +
-        "            \"query\" : \"%s\",\n" +
-        "            \"type\" : \"boolean\"\n" +
+        "            \"query\" : \"%s\"\n" +
         "          }\n" +
         "        }\n" +
         "      } ]\n" +
@@ -337,11 +327,9 @@ public class ElasticsearchService {
    * @param regexQuery the tag name prefix
    * @return a list of tags whose names match the given prefix
    */
-  public Collection<Long> findByName(String regexQuery) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(regexpQuery("name", regexQuery));
-//    String query = searchSourceBuilder.toString();
+  public Collection<Long> findTagsByName(String regexQuery) {
     String query = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"regexp\" : {\n" +
         "      \"name\" : {\n" +
@@ -361,25 +349,75 @@ public class ElasticsearchService {
    * @param value the metadata value
    * @return a list of tags containing the exact metadata requested
    */
-  public Collection<Long> findByMetadata(String key, String value) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(matchQuery("metadata." + key, value))
-//            .aggregation(AggregationBuilders.terms("group-by-id")
-//                    .field("id")
-//                    .size(0)
-//            );
-//    String queryString = searchSourceBuilder.toString();
+  public Collection<Long> findTagsByMetadata(String key, String value) {
     String queryString = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"match\" : {\n" +
         "      \"metadata.%s\" : {\n" +
-        "        \"query\" : \"%s\",\n" +
-        "        \"type\" : \"boolean\"\n" +
+        "        \"query\" : \"%s\"\n" +
         "      }\n" +
         "    }\n" +
         "  }\n" +
         "}", key, value);
     return findTagsByQuery(queryString, "Error when collecting tags for given metadata");
+  }
+
+  /**
+   * Find all tags containing the provided metadata key.
+   *
+   * @param key   the metadata key
+   * @return a list of tags containing the metadata requested
+   */
+  public Collection<Long> findTagsByMetadata(String key) {
+    String queryString = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
+        "  \"query\" : {\n" +
+        "    \"exists\" : {\n" +
+        "      \"field\" : \"metadata.%s\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}", key);
+    return findTagsByQuery(queryString, "Error when collecting tags for given metadata");
+  }
+
+  /**
+   * Find all tags containing the provided alarm metadata key.
+   *
+   * @param key The alarm metadata key
+   * @return A list of tags containing the metadata requested
+   */
+  public Collection<Long> findTagsByAlarmMetadata(String key) {
+    String queryString = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
+        "  \"query\" : {\n" +
+        "    \"exists\" : {\n" +
+        "      \"field\" : \"alarms.metadata.%s\"\n" +
+        "    }\n" +
+        "  }\n" +
+        "}", key);
+    return findTagsByQuery(queryString, "Error when collecting tags for given alarm metadata");
+  }
+
+  /**
+   * Find all tags containing the exact metadata key/value pair.
+   *
+   * @param key   the alarm metadata key
+   * @param value the alarm metadata value
+   * @return a list of tags containing the exact metadata requested
+   */
+  public Collection<Long> findTagsByAlarmMetadata(String key, String value) {
+    String queryString = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
+        "  \"query\" : {\n" +
+        "    \"match\" : {\n" +
+        "      \"alarms.metadata.%s\" : {\n" +
+        "        \"query\" : \"%s\"\n" +
+        "      }\n" +
+        "    }\n" +
+        "  }\n" +
+        "}", key, value);
+    return findTagsByQuery(queryString, "Error when collecting tags for given alarm metadata");
   }
 
   /**
@@ -391,7 +429,7 @@ public class ElasticsearchService {
    *
    * @return a set of all distinct metadata keys in use across all mappings
    */
-  public Set<String> getDistinctMetadataKeys() {
+  public Set<String> getDistinctTagMetadataKeys() {
     GetMapping get = new GetMapping.Builder().addIndex(timeSeriesIndex).build();
     try {
       Set<String> keys = new HashSet<>();
@@ -420,11 +458,6 @@ public class ElasticsearchService {
   }
 
   public List<Long> getTopAlarms(Integer size) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.aggregation(AggregationBuilders.terms("group-by-id")
-//        .field("id")
-//        .size(size));
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
         "  \"aggregations\" : {\n" +
         "    \"group-by-id\" : {\n" +
@@ -440,19 +473,12 @@ public class ElasticsearchService {
             .stream()
             .map(bucket -> Long.valueOf(bucket.getKey()))
             .collect(Collectors.toList()));
-    return findByQuery(query, converter, alarmIndex,"Error querying top most active alarms");
+    return findTagsByQuery(query, converter, alarmIndex,"Error querying top most active alarms");
   }
 
   public List<Object[]> getAlarmHistory(Long id, Long min, Long max) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(boolQuery()
-//        .must(termQuery("id", id))
-//        .must(rangeQuery("timestamp").from(min).to(max)))
-//        .sort("timestamp", SortOrder.DESC)
-//        .size(100);
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
-        "  \"size\" : 100,\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"bool\" : {\n" +
         "      \"must\" : [ {\n" +
@@ -482,17 +508,12 @@ public class ElasticsearchService {
         .stream()
         .map(hit -> new Object[]{hit.source.get("timestamp"), hit.source.get("active")})
         .collect(Collectors.toList()));
-    return findByQuery(query, converter,  alarmIndex,"Error querying alarm history");
+    return findTagsByQuery(query, converter,  alarmIndex,"Error querying alarm history");
   }
 
   public Collection<Long> findAlarmsByName(String name) {
-//    SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-//    searchSourceBuilder.query(boolQuery()
-//        .should(regexpQuery("faultFamily", name))
-//        .should(regexpQuery("faultMember", name)))
-//        .sort("timestamp", SortOrder.DESC);
-//    String query = searchSourceBuilder.toString();
     String query = String.format("{\n" +
+        "  \"size\" : " + maxResults + ",\n" +
         "  \"query\" : {\n" +
         "    \"bool\" : {\n" +
         "      \"should\" : [ {\n" +
@@ -523,6 +544,6 @@ public class ElasticsearchService {
         .stream()
         .map(hit -> (long) hit.source.get("id"))
         .collect(Collectors.toList()));
-    return findByQuery(query, converter, alarmIndex,"Error querying alarms by name");
+    return findTagsByQuery(query, converter, alarmIndex,"Error querying alarms by name");
   }
 }

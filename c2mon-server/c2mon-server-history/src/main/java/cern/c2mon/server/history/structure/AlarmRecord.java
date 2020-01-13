@@ -56,10 +56,14 @@ public class AlarmRecord implements IFallback, Loggable {
     private String info;
 
     private Timestamp serverTimestamp;
+    
+    private Timestamp sourceTimestamp;
 
     private Timestamp logDate = null;
 
     private String timezone;
+    
+    private boolean oscillating;
 
     @Override
     public String getValue() {

@@ -254,21 +254,9 @@ public class TagServiceImpl implements AdvancedTagService {
     unsubscribe(id, listener);
   }
 
-  @Deprecated
-  public void unsubscribeAllDataTags(final BaseTagListener listener) {
-    cache.unsubscribeAllDataTags(listener);
-    tagUpdateListeners.remove(listener);
-  }
-
   @Override
   public void unsubscribe(final BaseTagListener listener) {
     cache.unsubscribeAllDataTags(listener);
-    tagUpdateListeners.remove(listener);
-  }
-
-  @Deprecated
-  public void unsubscribeDataTags(final Set<Long> dataTagIds, final BaseTagListener listener) {
-    cache.unsubscribeDataTags(dataTagIds, listener);
     tagUpdateListeners.remove(listener);
   }
 
@@ -463,7 +451,7 @@ public class TagServiceImpl implements AdvancedTagService {
 
   @Override
   public Collection<Tag> findByMetadata(String key, String value) {
-    return get(elasticsearchService.findByMetadata(key, value));
+    return get(elasticsearchService.findTagsByMetadata(key, value));
   }
 
   /**

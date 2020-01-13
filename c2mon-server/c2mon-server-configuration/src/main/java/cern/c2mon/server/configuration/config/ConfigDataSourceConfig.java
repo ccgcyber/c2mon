@@ -6,7 +6,7 @@ import org.apache.ibatis.mapping.VendorDatabaseIdProvider;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceBuilder;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -36,11 +36,12 @@ public class ConfigDataSourceConfig {
     // in-process database, start a file-based externally visible database or connect to
     // an external database.
     if (url.contains("hsql")) {
-      return new HsqlDatabaseBuilder()
+      return HsqlDatabaseBuilder.builder()
                  .url(url)
                  .username(username)
                  .password(password)
-                 .addScript(new ClassPathResource("sql/config-schema-hsqldb.sql")).build();
+                 .script(new ClassPathResource("sql/config-schema-hsqldb.sql"))
+                 .build().toDataSource();
     } else {
       return DataSourceBuilder.create().build();
     }

@@ -5,7 +5,7 @@
   <parent>
     <groupId>cern.c2mon.client</groupId>
     <artifactId>c2mon-client</artifactId>
-    <version>1.8.40-SNAPSHOT</version>
+    <version>1.9.3-SNAPSHOT</version>
   </parent>
 
   <artifactId>c2mon-client-core</artifactId>
@@ -67,17 +67,6 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-autoconfigure</artifactId>
     </dependency>
-    
-    <!-- Bean Validation provider -->
-    <dependency>
-        <groupId>org.hibernate</groupId>
-        <artifactId>hibernate-validator</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.glassfish.web</groupId>
-      <artifactId>javax.el</artifactId>
-    </dependency>
-
     <dependency>
       <groupId>io.searchbox</groupId>
       <artifactId>jest</artifactId>
@@ -121,12 +110,16 @@
       <groupId>cern.c2mon.server</groupId>
       <artifactId>c2mon-server-elasticsearch</artifactId>
       <version>${project.parent.version}</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.powermock</groupId>
       <artifactId>powermock-module-junit4</artifactId>
       <version>1.6.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

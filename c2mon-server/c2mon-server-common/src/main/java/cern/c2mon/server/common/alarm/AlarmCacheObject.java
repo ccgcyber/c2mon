@@ -1,56 +1,44 @@
 /******************************************************************************
- * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
- * 
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
+ *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free
  * Software Foundation, either version 3 of the license.
- * 
+ *
  * C2MON is distributed in the hope that it will be useful, but WITHOUT ANY
  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for
  * more details.
- * 
+ *
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 package cern.c2mon.server.common.alarm;
 
 import java.sql.Timestamp;
+import java.util.LinkedList;
 
 import lombok.Data;
 
 import cern.c2mon.server.common.metadata.Metadata;
+import cern.c2mon.shared.client.alarm.condition.AlarmCondition;
 import cern.c2mon.shared.common.Cacheable;
 
 /**
  * Alarm object held in the cache.
- * 
- * Imported more or less as-is into C2MON.
- * 
- * Note: in TIM1 care was taken to make sure this is "" and not null - be careful when sending to LASER as this may be the reason (?)
- * 
+ * <p/>
+ * Note: in TIM1 care was taken to make sure this is "" and not null - be
+ * careful when sending to LASER as this may be the reason (?)
+ *
  * @author Mark Brightwell
- * 
+ *
  */
 @Data
 public class AlarmCacheObject implements Cloneable, Cacheable, Alarm {
 
   /** Serial version UID */
   private static final long serialVersionUID = 794087757524662419L;
-    
-  /**
-   * This enum contains all the possible change state values
-   * which an alarm object can have.
-   */
-  public enum AlarmChangeState {
-    /** Alarm state hasn't changed since. */
-    CHANGE_NONE,
-    /** The alarm's state has changed. */
-    CHANGE_STATE,
-    /** The additional information about the alarm has changed since the last update call. */
-    CHANGE_PROPERTIES
-  };
 
   /**
    * Internal identifier of the AlarmCacheObject.
@@ -65,17 +53,17 @@ public class AlarmCacheObject implements Cloneable, Cacheable, Alarm {
   private Long dataTagId;
 
   /**
-   * LASER fault family of the alarm.
+   * Fault family of the alarm.
    **/
   private String faultFamily;
 
   /**
-   * LASER fault member of the alarm.
+   * Fault member of the alarm.
    **/
   private String faultMember;
 
   /**
-   * LASER fault code of the alarm.
+   * Fault code of the alarm.
    **/
   private int faultCode;
 
@@ -85,64 +73,67 @@ public class AlarmCacheObject implements Cloneable, Cacheable, Alarm {
   private AlarmCondition condition;
 
   /**
-   * The meta data of the Alatm. The meta data can be arbitrary and of of the type String, Numeric and Boolean.
-   * Not every Alarm needs to have a meta data. Also the meta data don't have to be every time the same.
+   * The meta data of the Alarm. The meta data can be arbitrary and of of the
+   * type String, Numeric and Boolean. Not every Alarm needs to have a meta
+   * data. Also the meta data don't have to be every time the same.
    */
   private Metadata metadata;
 
-  /** 
-   * The alarm's current state 
-   **/
-  private String state;
-
   /**
-   * Member indicating whether the alarm's state or properties have changed 
-   * since the last update.
+   * <code>true</code>, if the alarm state is active as published to listeners
+   * (may be forced to <code>true</code> and silenced in case of oscillation)
    */
-  private AlarmChangeState alarmChangeState;
+  private boolean active = false;
 
-   /**
-   * Timestamp of the last state change
-   **/
+  /** Same as the server timestamp of the tag, that triggered the alarm state change */
   private Timestamp timestamp;
-  
-  /**
-   * Was the current alarm value published?
-   */
-  private boolean published = false;
+
+  /** This timestamp is taken from the incoming datatag value update */
+  private Timestamp sourceTimestamp;
 
   /**
-   * Optional info property. 
-   * TODO in TIM1 care was taken to make sure this is "" and not null - be careful when sending to LASER as this may be the reason
+   * Optional info property
    **/
   private String info;
-  
-  /**
-   * Latest state to be published.
-   */
-  private AlarmPublication lastPublication;
 
   /**
    * Name of the JMS topic on which the alarm will be distributed to clients.
-   * TODO remove because single topic now for alarm publication?
    */
   private String topic = "c2mon.client.alarm";
-  
+
+  ///////////////////////////////////////////////////////////////////////////////
+  /////////// VARIABLES REQUIRED FOR DETECTING ALARM OSCILLATION ////////////////
+  ///////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * <code>true</code> if the alarm state is active as maintained internally. This state is not exposed to listeners
+   * and only used for the purpose of detecting and maintaining oscillation.
+   * It always reflect the true state of an alarm, regardless of oscillation status
+   * (in contrast with the attribute <b>active</b> which may be forced to <code>true</code> if an oscillation is ongoing).
+   */
+  private boolean internalActive;
+
+  /** Used to keep the n last source timestamps to calculate the oscillation time range */
+  private LinkedList<Long> fifoSourceTimestamps = new LinkedList<>();
+
+  /** Set to <code>true</code>, if alarm starts oscillating */
+  private boolean oscillating;
+
+
   /**
    * Default constructor.
    */
   public AlarmCacheObject() {
-    // Initialise run-time parameters with default values 
-    // (overwritten on loading if DB has none null values)
-    this.state = AlarmCondition.TERMINATE;
-    this.alarmChangeState = AlarmChangeState.CHANGE_NONE;
     this.timestamp = new Timestamp(0);
-    this.info = "";    
+    this.sourceTimestamp = timestamp;
+    this.info = "";
   }
 
   /**
    * Constructor setting Alarm id.
-   * @param id the id of the Alarm
+   *
+   * @param id
+   *          the id of the Alarm
    */
   public AlarmCacheObject(final Long id) {
     this();
@@ -151,24 +142,30 @@ public class AlarmCacheObject implements Cloneable, Cacheable, Alarm {
 
   /**
    * Create a deep clone of this AlarmCacheObject.
-   * 
+   *
    * @return a deep clone of this AlarmCacheObject
-   * @throws CloneNotSupportedException should never be thrown
+   * @throws CloneNotSupportedException
+   *           should never be thrown
    */
-  public Object clone() throws CloneNotSupportedException {    
-     AlarmCacheObject alarmCacheObject = (AlarmCacheObject) super.clone();
-     if (this.condition != null) {
-       alarmCacheObject.condition = (AlarmCondition) this.condition.clone();
-     }     
-     if (this.timestamp != null){
-       alarmCacheObject.timestamp = (Timestamp) this.timestamp.clone();
-     }
-     if (this.lastPublication != null) {
-       alarmCacheObject.lastPublication = (AlarmPublication) lastPublication.clone();
-     }
-     return alarmCacheObject;
+  @Override
+  public AlarmCacheObject clone() throws CloneNotSupportedException {
+    AlarmCacheObject alarmCacheObject = (AlarmCacheObject) super.clone();
+    if (this.condition != null) {
+      alarmCacheObject.condition = (AlarmCondition) this.condition.clone();
+    }
+    if (this.metadata != null) {
+      alarmCacheObject.metadata = this.metadata.clone();
+    }
+    if (this.timestamp != null) {
+      alarmCacheObject.timestamp = (Timestamp) this.timestamp.clone();
+    }
+    if (this.sourceTimestamp != null) {
+      alarmCacheObject.sourceTimestamp = (Timestamp) this.sourceTimestamp.clone();
+    }
+    return alarmCacheObject;
   }
 
+  @Override
   public final Metadata getMetadata() {
     if (this.metadata == null) {
       this.metadata = new Metadata();
@@ -186,58 +183,43 @@ public class AlarmCacheObject implements Cloneable, Cacheable, Alarm {
     return this.dataTagId;
   }
 
-  /**
-   * Checks if the Alarm state is ACTIVE.
-   * @return true if the alarm is currently active.
-   */
-  public boolean isActive() {
-    return this.state != null && this.state.equals(AlarmCondition.ACTIVE);
-  }
-  
-  @Override
-  public void hasBeenPublished(Timestamp publicationTime) {
-    if (publicationTime == null) {
-      throw new NullPointerException("Cannot set publication time to null");
-    }
-    published = true;
-    if (state != null) {
-      lastPublication = new AlarmPublication(this.state, this.info, publicationTime);
-    }    
-  }
-  
-  @Override
-  public void notYetPublished() {
-    published = false;
-  }
-
-  @Override
-  public boolean isPublishedToLaser() {
-    return isPublished();
-  }
-  
   @Override
   public String toString() {
-    StringBuffer str = new StringBuffer();
+    return toString(false);
+  }
 
-    str.append(getId());
-    str.append('\t');
-    str.append(getTagId());
-    str.append('\t');
-    str.append(getTimestamp());
-    str.append('\t');
-    str.append(getFaultFamily());
-    str.append('\t');
-    str.append(getFaultMember());
-    str.append('\t');
-    str.append(getFaultCode());
-    str.append('\t');
-    str.append(getState());
+  /**
+   * Convert the object to string, with optional extended debug information.
+   *
+   * @param extended <code>true</code> to obtain debug information.
+   * @return A string representation of the object.
+   */
+  @Override
+  public String toString(boolean extended) {
+    StringBuilder str = new StringBuilder();
+
+    str.append(getId())
+       .append('\t')
+       .append(getTagId())
+       .append('\t')
+       .append(getTimestamp())
+       .append('\t')
+       .append(getFaultFamily())
+       .append('\t')
+       .append(getFaultMember())
+       .append('\t')
+       .append(getFaultCode())
+       .append('\t')
+       .append(isActive());
     if (getInfo() != null) {
       str.append('\t');
       str.append(getInfo());
     }
+    if (extended) {
+      str.append("\tinternalActive: ");
+      str.append(this.internalActive);
+    }
 
     return str.toString();
   }
-
 }

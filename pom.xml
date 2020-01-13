@@ -4,7 +4,7 @@
 
   <groupId>cern.c2mon</groupId>
   <artifactId>c2mon</artifactId>
-  <version>1.8.40-SNAPSHOT</version>
+  <version>1.9.3-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <modules>
@@ -12,9 +12,8 @@
     <module>c2mon-client</module>
     <module>c2mon-daq</module>
     <module>c2mon-shared</module>
-    <module>docs</module>
   </modules>
-   
+
    <distributionManagement>
      <repository>
        <id>c2mon-nexus-releases</id>
@@ -35,12 +34,17 @@
 
 
   <properties>
-    <org.springframework.version>4.3.4.RELEASE</org.springframework.version>
-    <org.springframework.boot.version>1.4.2.RELEASE</org.springframework.boot.version>
+    <org.springframework.version>5.1.2.RELEASE</org.springframework.version>
+    <org.springframework.boot.version>2.1.0.RELEASE</org.springframework.boot.version>
     <org.slf4j.version>1.7.5</org.slf4j.version>
     <org.apache.activemq.version>5.15.2</org.apache.activemq.version>
-    <elasticsearch.version>5.6.0</elasticsearch.version>
+    <elasticsearch.version>6.4.3</elasticsearch.version>
     <mockito-all.version>1.10.19</mockito-all.version>
+    <com.fasterxml.jackson.core>2.9.2</com.fasterxml.jackson.core>
+    <!-- Start: Used for K8S distributions -->
+    <grafana.version>6.1.2</grafana.version>
+    <mysql.version>5.7.15</mysql.version>
+    <!-- End: Used for K8S distributions -->
 
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -72,7 +76,7 @@
       <dependency>
         <groupId>org.projectlombok</groupId>
         <artifactId>lombok</artifactId>
-        <version>1.16.10</version>
+        <version>1.18.4</version>
         <scope>provided</scope>
       </dependency>
       <dependency>
@@ -83,11 +87,6 @@
       <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-beans</artifactId>
-        <version>${org.springframework.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-context</artifactId>
         <version>${org.springframework.version}</version>
       </dependency>
       <dependency>
@@ -113,7 +112,7 @@
       </dependency>
       <dependency>
         <groupId>org.springframework</groupId>
-        <artifactId>spring-jdbc</artifactId>
+        <artifactId>spring-context</artifactId>
         <version>${org.springframework.version}</version>
       </dependency>
       <dependency>
@@ -123,8 +122,23 @@
       </dependency>
       <dependency>
         <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+        <version>${org.springframework.boot.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-logging</artifactId>
         <version>${org.springframework.boot.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jul-to-slf4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-to-slf4j</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.springframework.boot</groupId>
@@ -134,6 +148,11 @@
       <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-configuration-processor</artifactId>
+        <version>${org.springframework.boot.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-activemq</artifactId>
         <version>${org.springframework.boot.version}</version>
       </dependency>
       <dependency>
@@ -195,6 +214,11 @@
         <version>4.5.1</version>
         <scope>runtime</scope>
       </dependency>
+      <dependency>
+        <groupId>javax.jms</groupId>
+        <artifactId>javax.jms-api</artifactId>
+        <version>2.0.1</version>
+      </dependency>
 
       <dependency>
         <groupId>commons-dbcp</groupId>
@@ -224,17 +248,17 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-annotations</artifactId>
-        <version>2.6.5</version>
+        <version>${com.fasterxml.jackson.core}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-core</artifactId>
-        <version>2.6.5</version>
+        <version>${com.fasterxml.jackson.core}</version>
       </dependency>
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>2.6.5</version>
+        <version>${com.fasterxml.jackson.core}</version>
       </dependency>
       <!-- The following dependencies are required for using Ehcache & BigMemory.
            ehcache-ee-2.7.5 is shipped together with bigmemory-4.0.5 -->
@@ -266,7 +290,7 @@
       <dependency>
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
-        <version>2.2.2</version>
+        <version>2.8.4</version>
       </dependency>
       <dependency>
         <groupId>commons-lang</groupId>
@@ -293,19 +317,7 @@
         <artifactId>mysql-connector-java</artifactId>
         <version>5.1.38</version>
       </dependency>
-      
-      <!-- Bean Validation provider -->
-      <dependency>
-        <groupId>org.hibernate</groupId>
-        <artifactId>hibernate-validator</artifactId>
-        <version>5.4.2.Final</version>
-      </dependency>
-      <dependency>
-        <groupId>org.glassfish.web</groupId>
-        <artifactId>javax.el</artifactId>
-        <version>2.2.4</version>
-      </dependency>
-      
+
       <dependency>
         <groupId>org.aspectj</groupId>
         <artifactId>aspectjweaver</artifactId>
@@ -361,15 +373,11 @@
         <scope>test</scope>
       </dependency>
       <dependency>
-        <groupId>ch.qos.logback</groupId>
-        <artifactId>logback-classic</artifactId>
-        <version>1.1.8</version>
+        <groupId>org.awaitility</groupId>
+        <artifactId>awaitility</artifactId>
+        <version>3.1.5</version>
+        <scope>test</scope>
       </dependency>
-      <dependency>
-          <groupId>net.jcip</groupId>
-          <artifactId>jcip-annotations</artifactId>
-          <version>1.0</version>
-        </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -386,7 +394,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>2.8.1</version>
+          <version>2.19.1</version>
           <configuration>
             <forkMode>never</forkMode>
             <perCoreThreadCount>false</perCoreThreadCount>

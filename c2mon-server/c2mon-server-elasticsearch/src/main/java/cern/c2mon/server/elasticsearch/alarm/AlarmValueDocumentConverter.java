@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (C) 2010-2018 CERN. All rights not expressly granted are reserved.
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
  *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
@@ -37,6 +37,8 @@ public class AlarmValueDocumentConverter extends BaseAlarmDocumentConverter {
     document.put("activeNumeric", alarm.isActive() ? 1 : 0);
     document.put("info", alarm.getInfo());
     document.put("timestamp", alarm.getTimestamp().getTime());
+    document.put("sourceTimestamp", alarm.getSourceTimestamp().getTime());
+    document.put("oscillating", alarm.isOscillating());
     return document;
   }
 }

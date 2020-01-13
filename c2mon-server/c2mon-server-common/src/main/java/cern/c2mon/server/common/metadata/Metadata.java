@@ -34,13 +34,6 @@ public class Metadata implements Serializable, Cloneable {
     return null;
   }
 
-  /**
-   * @return a map representation of the metadata
-   */
-  public Map<String, Object> toMap() {
-    return new HashMap<>(this.metadata);
-  }
-
   public static Map<String, Object> fromJSON(String json) {
     try {
       TypeReference<HashMap<String, Object>> typeRef = new TypeReference<HashMap<String, Object>>() {};
@@ -52,11 +45,27 @@ public class Metadata implements Serializable, Cloneable {
     return null;
   }
 
+  /**
+   * @return a map representation of the metadata
+   */
+  public Map<String, Object> toMap() {
+    return new HashMap<>(this.metadata);
+  }
+
   public void addMetadata(String key, Object value) {
     metadata.put(key, value);
   }
 
   public void removeMetadata(String key) {
     metadata.remove(key);
+  }
+
+  @Override
+  public Metadata clone() throws CloneNotSupportedException {
+    Metadata clone = (Metadata) super.clone();
+
+    clone.metadata = toMap();
+
+    return clone;
   }
 }

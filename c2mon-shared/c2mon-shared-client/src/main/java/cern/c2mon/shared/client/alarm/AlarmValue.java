@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
  * 
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
@@ -22,7 +22,7 @@ import java.util.Map;
 import cern.c2mon.shared.client.request.ClientRequestResult;
 
 /**
- * This 
+ * Alarm value interface
  *
  * @author Matthias Braeger
  */
@@ -40,6 +40,11 @@ public interface AlarmValue extends ClientRequestResult {
    */
   Timestamp getTimestamp();
   
+  /** UTC timestamp of the alarm's source tag timestamp 
+   * @return the UTC timestamp of the alarm's source tag timestamp 
+   */
+  Timestamp getSourceTimestamp();
+
   /**
    * Get the optional additional info on the alarm that is to be sent to
    * LASER as a "user-defined" fault state property.
@@ -76,13 +81,18 @@ public interface AlarmValue extends ClientRequestResult {
   /** 
    * @return The description of the Tag 
    */
-  @Deprecated
   String getTagDescription();
   
   /**
    * @return true if the alarm is currently active.
    */
   boolean isActive();
+  
+  
+  /**
+   * @return <code>true</code>, if oscillation control got activated for that alarm on the server side
+   */
+  boolean isOscillating();
   
   /**
    * @return true if this.alarm is more recent.

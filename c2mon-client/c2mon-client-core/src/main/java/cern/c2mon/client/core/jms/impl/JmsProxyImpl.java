@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (C) 2010-2016 CERN. All rights not expressly granted are reserved.
+ * Copyright (C) 2010-2019 CERN. All rights not expressly granted are reserved.
  *
  * This file is part of the CERN Control and Monitoring Platform 'C2MON'.
  * C2MON is free software: you can redistribute it and/or modify it under the
@@ -17,6 +17,7 @@
 package cern.c2mon.client.core.jms.impl;
 
 import java.io.Serializable;
+import java.lang.IllegalStateException;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -31,23 +32,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.annotation.PreDestroy;
-import javax.jms.Connection;
-import javax.jms.ConnectionFactory;
-import javax.jms.DeliveryMode;
-import javax.jms.Destination;
-import javax.jms.ExceptionListener;
-import javax.jms.JMSException;
-import javax.jms.Message;
-import javax.jms.MessageConsumer;
-import javax.jms.MessageProducer;
-import javax.jms.ObjectMessage;
-import javax.jms.Session;
-import javax.jms.TemporaryQueue;
-import javax.jms.TextMessage;
-import javax.jms.Topic;
+import javax.jms.*;
 
-import com.google.gson.JsonSyntaxException;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.command.ActiveMQTopic;
@@ -56,6 +43,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
 import org.springframework.stereotype.Component;
+
+import com.google.gson.JsonSyntaxException;
+
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import cern.c2mon.client.common.listener.ClientRequestReportListener;
 import cern.c2mon.client.core.config.C2monClientProperties;
@@ -90,7 +82,7 @@ import cern.c2mon.shared.client.request.JsonRequest;
 @Slf4j
 @Component("jmsProxy")
 @ManagedResource(objectName = "cern.c2mon:type=JMS,name=JmsProxy")
-public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
+public final class JmsProxyImpl implements JmsProxy {
 
   /**
    * Time between reconnection attempts if the first attempt fails (in
@@ -124,7 +116,8 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
   /**
    * The unique JMS connection used.
    */
-  private Connection connection;
+  @Getter
+  private ActiveMQConnection connection;
 
   /**
    * Indicates which {@link MessageListenerWrapper} is listening to a given
@@ -328,15 +321,15 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
   private synchronized void connect() {
     while (!connected && !shutdownRequested) {
       try {
-        connection = jmsConnectionFactory.createConnection();
-        refreshSubscriptions();
-        connection.setExceptionListener(this);
+        connection = (ActiveMQConnection) jmsConnectionFactory.createConnection();
         connection.start();
+        connection.addTransportListener((ActiveMQTransportListener) this::startReconnectThread);
+        refreshSubscriptions();
         connected = true;
       } catch (Exception e) {
         log.error("Exception caught while trying to refresh the JMS connection; sleeping 5s before retrying.", e);
         try {
-          Thread.sleep(SLEEP_BETWEEN_CONNECTION_ATTEMPTS);
+          wait(SLEEP_BETWEEN_CONNECTION_ATTEMPTS);
         } catch (InterruptedException interEx) {
           log.error("InterruptedException caught while waiting to reconnect.", interEx);
         }
@@ -399,7 +392,7 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     for (Map.Entry<String, MessageListenerWrapper> entry : topicToWrapper.entrySet()) {
       entry.getValue().stop();
     }
-    if (connection != null) {
+    if (connection != null && !connection.isClosed() && connection.isTransportFailed()) {
       try {
         connection.close(); // closes all consumers and sessions also
       } catch (JMSException e) {
@@ -858,17 +851,6 @@ public final class JmsProxyImpl implements JmsProxy, ExceptionListener {
     } finally {
       connectionListenersLock.writeLock().unlock();
     }
-  }
-
-  /**
-   * Listeners are notified of disconnection in reconnection thread.
-   */
-  @Override
-  public void onException(final JMSException exception) {
-    String message = "JMSException caught by JMS connection exception listener (attempting to reconnect): " + exception.getMessage();
-    log.error(message);
-    log.debug(message, exception);
-    startReconnectThread();
   }
 
   @Override
