@@ -23,22 +23,38 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.ResourceAlreadyExistsException;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
+import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.bulk.BulkProcessor;
+import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.NoNodeAvailableException;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.unit.ByteSizeUnit;
+import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 import cern.c2mon.server.elasticsearch.config.ElasticsearchProperties;
+import cern.c2mon.server.elasticsearch.domain.IndexMetadata;
+
+import static cern.c2mon.server.elasticsearch.config.ElasticsearchProperties.*;
 
 /**
  * Wrapper around {@link Client}. Connects asynchronously, but also provides
@@ -50,46 +66,130 @@ import cern.c2mon.server.elasticsearch.config.ElasticsearchProperties;
  * @author Serhiy Boychenko
  */
 @Slf4j
-@Component
-@ConditionalOnProperty(name = "c2mon.server.elasticsearch.rest", havingValue = "false")
-public final class ElasticsearchClientTransport implements ElasticsearchClient<Client> {
-  @Getter
+public final class ElasticsearchClientTransport implements ElasticsearchClient {
+
   private final ElasticsearchProperties properties;
-  @Getter
-  private final Client client;
+
+  private TransportClient client;
 
   /**
+   * Elasticsearch Transport client constructor
+   *
    * @param properties to initialize Transport client.
    */
   @Autowired
   public ElasticsearchClientTransport(ElasticsearchProperties properties) {
     this.properties = properties;
-    this.client = createClient();
+
+    setup();
 
     connectAsynchronously();
   }
 
-  /**
-   * Creates a {@link Client} to communicate with the Elasticsearch cluster.
-   *
-   * @return the {@link Client} instance
-   */
-  private Client createClient() {
-    final Settings.Builder settingsBuilder = Settings.builder();
+  @Override
+  public BulkProcessor getBulkProcessor(BulkProcessor.Listener listener) {
+    return BulkProcessor.builder(client, listener)
+        .setBulkActions(properties.getBulkActions())
+        .setBulkSize(new ByteSizeValue(properties.getBulkSize(), ByteSizeUnit.MB))
+        .setFlushInterval(TimeValue.timeValueSeconds(properties.getBulkFlushInterval()))
+        .setConcurrentRequests(properties.getConcurrentRequests())
+        .build();
+  }
 
-    settingsBuilder.put("node.name", properties.getNodeName())
-        .put("cluster.name", properties.getClusterName())
-        .put("http.enabled", properties.isHttpEnabled());
+  @Override
+  public boolean createIndex(IndexMetadata indexMetadata, String mapping) {
+    CreateIndexRequestBuilder builder = client.admin().indices().prepareCreate(indexMetadata.getName());
+    builder.setSettings(Settings.builder()
+        .put("number_of_shards", properties.getShardsPerIndex())
+        .put("number_of_replicas", properties.getReplicasPerShard())
+        .build());
 
-    TransportClient transportClient = new PreBuiltTransportClient(settingsBuilder.build());
-    try {
-      transportClient.addTransportAddress(new TransportAddress(InetAddress.getByName(properties.getHost()), properties.getPort()));
-    } catch (UnknownHostException e) {
-      log.error("Error connecting to the Elasticsearch cluster at {}:{}", properties.getHost(), properties.getPort(), e);
-      return null;
+    if (mapping != null) {
+      builder.addMapping(TYPE, mapping, XContentType.JSON);
     }
 
-    return transportClient;
+    log.debug("Creating new index with name {}", indexMetadata.getName());
+
+    try {
+      CreateIndexResponse response = builder.get();
+      return response.isAcknowledged();
+    } catch (ResourceAlreadyExistsException e) {
+      log.debug("Index already exists.", e);
+    }
+
+    return false;
+  }
+
+  @Override
+  public boolean indexData(IndexMetadata indexMetadata, String data) {
+    IndexRequest indexRequest = new IndexRequest(indexMetadata.getName(), TYPE);
+    if (indexMetadata.getId() != null && !indexMetadata.getId().isEmpty()) {
+      indexRequest.id(indexMetadata.getId());
+    }
+    indexRequest.source(data, XContentType.JSON);
+    indexRequest.routing(indexMetadata.getRouting());
+
+    try {
+      IndexResponse indexResponse = client.index(indexRequest).get();
+      return indexResponse.status().equals(RestStatus.CREATED) || indexResponse.status().equals(RestStatus.OK);
+    } catch (InterruptedException | ExecutionException e) {
+      log.error("Error indexing '#{}' to '{}'.", indexMetadata.getId(), indexMetadata.getName(), e);
+    }
+
+    return false;
+  }
+
+  @Override
+  public boolean isIndexExisting(IndexMetadata indexMetadata) {
+    SearchRequest searchRequest = new SearchRequest(indexMetadata.getName());
+    searchRequest.types(TYPE);
+    searchRequest.routing(indexMetadata.getRouting());
+
+    try {
+      SearchResponse response = client.search(searchRequest).get();
+      return response.status().equals(RestStatus.OK);
+    } catch (InterruptedException | ExecutionException e) {
+      log.error("Error searching index '{}'.", indexMetadata.getName(), e);
+    }
+
+    return false;
+  }
+
+  @Override
+  public boolean updateIndex(IndexMetadata indexMetadata, String data) {
+    UpdateRequest updateRequest = new UpdateRequest(indexMetadata.getName(), TYPE, indexMetadata.getId());
+    updateRequest.doc(data, XContentType.JSON);
+    updateRequest.routing(indexMetadata.getId());
+
+    IndexRequest indexRequest = new IndexRequest(indexMetadata.getName(), TYPE, indexMetadata.getId());
+    indexRequest.source(data, XContentType.JSON);
+    indexRequest.routing(indexMetadata.getId());
+
+    updateRequest.upsert(indexRequest);
+
+    try {
+      UpdateResponse updateResponse = client.update(updateRequest).get();
+      return updateResponse.status().equals(RestStatus.OK);
+    } catch (InterruptedException | ExecutionException e) {
+      log.error("Error updating index '{}'.", indexMetadata.getName(), e);
+    }
+
+    return false;
+  }
+
+  @Override
+  public boolean deleteIndex(IndexMetadata indexMetadata) {
+    DeleteRequest deleteRequest = new DeleteRequest(indexMetadata.getName(), TYPE, indexMetadata.getId());
+    deleteRequest.routing(indexMetadata.getRouting());
+
+    try {
+      DeleteResponse deleteResponse = client.delete(deleteRequest).get();
+      return deleteResponse.status().equals(RestStatus.OK);
+    } catch (InterruptedException | ExecutionException e) {
+      log.error("Error while deleting index", e);
+    }
+
+    return false;
   }
 
   /**
@@ -117,12 +217,12 @@ public final class ElasticsearchClientTransport implements ElasticsearchClient<C
                 break;
               }
 
-              sleep(100L);
+              sleep(1000L);
             }
             log.info("Elasticsearch cluster is yellow");
           }
       );
-      nodeReady.get(120, TimeUnit.SECONDS);
+      nodeReady.get(ElasticsearchClientConfiguration.CLIENT_SETUP_TIMEOUT, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       log.error("Exception when waiting for yellow status", e);
       throw new IllegalStateException("Exception when waiting for Elasticsearch yellow status!", e);
@@ -151,7 +251,35 @@ public final class ElasticsearchClientTransport implements ElasticsearchClient<C
       return status.equals(ClusterHealthStatus.YELLOW) || status.equals(ClusterHealthStatus.GREEN);
     } catch (NoNodeAvailableException e) {
       log.info("Elasticsearch cluster not yet ready: {}", e.getMessage());
-      log.debug("Elasticsearch cluster not yet ready: ", e);
+      log.trace("Elasticsearch cluster not yet ready: ", e);
+    }
+    return false;
+  }
+
+  @Override
+  @SuppressWarnings("squid:S2095")
+  public void setup() {
+    final Settings.Builder settingsBuilder = Settings.builder();
+
+    settingsBuilder.put("node.name", properties.getNodeName())
+        .put("cluster.name", properties.getClusterName())
+        .put("http.enabled", properties.isHttpEnabled());
+
+    client = new PreBuiltTransportClient(settingsBuilder.build());
+    try {
+      client.addTransportAddress(new TransportAddress(InetAddress.getByName(properties.getHost()), properties.getPort()));
+    } catch (UnknownHostException e) {
+      log.error("Error connecting to the Elasticsearch cluster at {}:{}", properties.getHost(), properties.getPort(), e);
+    }
+  }
+
+  @Override
+  public boolean isClientHealthy() {
+    try {
+      getClusterHealth();
+      return true;
+    } catch (Exception e) {
+      log.error("An error occurred checking cluster health: ", e);
     }
     return false;
   }

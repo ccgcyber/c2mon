@@ -14,20 +14,27 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with C2MON. If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
-package cern.c2mon.server.elasticsearch.exception;
+package cern.c2mon.server.elasticsearch.client;
 
 /**
- * An exception to be thrown when an error indexing ES entity occurs
+ * Defines available clients to communicate with Elasticsearch server
  *
  * @author Serhiy Boychenko
  */
-public class IndexingException extends RuntimeException {
+public enum ElasticsearchClientType {
+  REST(9200),
+  TRANSPORT(9300);
+
+  private final int defaultPort;
+
+  ElasticsearchClientType(int defaultPort) {
+    this.defaultPort = defaultPort;
+  }
 
   /**
-   * @param message to be associated with the exception
-   * @param cause   exception cause
+   * @return default port used by this client to communicate with Elasticsearch server
    */
-  public IndexingException(String message, Throwable cause) {
-    super(message, cause);
+  public int getDefaultPort() {
+    return defaultPort;
   }
 }

@@ -13,12 +13,15 @@ For more details on a given release, please check also the [version planning](ht
 - Alarm: Added support for alarms activation outside of a given range (CM-237)
 
 ### Changed
+- Upgrade code base to be compliant with Java 11 (CM-221)
+- ElasticSearch support: Fix the issue causing C2MON to choose incorrectly the ElasticSearch client for communicating with the ES server.
 - Client API: Added possibility to define credentials for making queries to Elasticsearch (CM-232)
 - Documentation is now build with Jekyll instead of MkDocs
 - Alarm: Code refactoring to allow creating custom alarm conditions (CM-239). More info in the [documentation](https://c2mon.web.cern.ch/c2mon/docs/user-guide/client-api/configuration-api.html)
 
 ### Fixed
 - Client API: Fixed Elasticsearch tests for C2MON client API (CM-230)
+- Docs: Fixed all cross-reference links in the C2MON documentation
 
 ### Deprecated
 - Client API: Renamed some of the ElasticsearchService methods. Old method names still exist but are marked as deprecated.
